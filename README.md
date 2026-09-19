@@ -6,6 +6,12 @@
 
 ScreenInk for Windows is the native Windows port of the open-source macOS screen annotation tool. It uses .NET 8, WPF and focused Win32 interop. The app is offline, has no account or analytics service, and targets Windows 10 version 2004 or newer plus Windows 11.
 
+<p align="center">
+  <a href="https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.1.0/ScreenInk-0.1.0-win-x64.zip"><strong>Download for Windows (x64)</strong></a>
+  ·
+  <a href="https://github.com/developerkaushalkishor/mac-tools/releases/download/v0.15.2/ScreenInk-0.15.2-macOS-arm64.zip">Download for macOS (Apple Silicon)</a>
+</p>
+
 > **Status: 0.1.0 developer preview.** The solution cross-builds successfully and core tests pass. Interaction validation must still run on a Windows machine because WPF cannot execute on macOS.
 
 ## Implemented foundation
@@ -47,13 +53,15 @@ The output is written under `artifacts/`. The current artifact is unsigned; publ
 
 ## Try the portable build without development tools
 
-1. Download `ScreenInk-0.1.0-win-x64.zip` from a GitHub release or CI artifact.
+1. [Download `ScreenInk-0.1.0-win-x64.zip`](https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.1.0/ScreenInk-0.1.0-win-x64.zip).
 2. Verify its SHA-256 value against the accompanying `.sha256` file.
 3. Extract the ZIP and launch `ScreenInk.exe`.
 4. Use the tray icon to enable/disable ScreenInk or recover the toolbar.
 5. Use `Ctrl+Alt+Shift+D` to toggle drawing mode.
 
 The preview is unsigned, so Windows SmartScreen can show an unknown-publisher warning. A public release should be Authenticode-signed before asking non-developers to install it.
+
+For macOS, use the [ScreenInk macOS repository](https://github.com/developerkaushalkishor/mac-tools).
 
 ## Project layout
 
