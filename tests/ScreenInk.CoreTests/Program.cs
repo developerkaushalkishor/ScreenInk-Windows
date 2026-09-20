@@ -6,7 +6,9 @@ var tests = new (string Name, Action Run)[]
     ("fade cleanup", TestFadeCleanup),
     ("point sampling", TestSampling),
     ("shift constraints", TestConstraints),
-    ("shape recognition", TestRecognition)
+    ("shape recognition", TestRecognition),
+    ("responsive toolbar geometry", TestToolbarGeometry),
+    ("edge reveal fires once per entry", TestToolbarReveal)
 };
 
 foreach (var test in tests)
@@ -72,6 +74,27 @@ static void TestRecognition()
     }).ToArray();
     Assert(ShapeRecognizer.Recognize(circle)?.Kind == StrokeKind.Ellipse,
         "Closed circular stroke should be recognized as an ellipse.");
+}
+
+static void TestToolbarGeometry()
+{
+    var display = new ToolbarFrame(-1280, 0, 640, 800);
+    var frame = ToolbarGeometry.TopCenter(display, 900, 54);
+    Equal(616d, frame.Width);
+    Equal(-1268d, frame.Left);
+    Equal(12d, frame.Top);
+    Assert(!ToolbarGeometry.ShowQuickColors(899), "Quick colors should collapse on narrow displays.");
+    Assert(ToolbarGeometry.ShowQuickColors(900), "Quick colors should appear when space is available.");
+}
+
+static void TestToolbarReveal()
+{
+    var tracker = new ToolbarRevealTracker();
+    Assert(tracker.Enter(true, "A"), "First edge entry should reveal.");
+    Assert(!tracker.Enter(true, "A"), "Polling inside the same edge must not reveal repeatedly.");
+    Assert(tracker.Enter(true, "B"), "Entering another display edge should relocate once.");
+    Assert(!tracker.Enter(false, null), "Leaving the edge only rearms reveal.");
+    Assert(tracker.Enter(true, "A"), "Re-entering after leaving should reveal again.");
 }
 
 static void Assert(bool condition, string message)

@@ -16,6 +16,9 @@ public sealed class AppSettings
     public string FontFamily { get; set; } = "Segoe Print";
     public double FontSize { get; set; } = 28;
     public InkTextAlignment TextAlignment { get; set; }
+    public string? ToolbarDisplayId { get; set; }
+    public double? ToolbarLeft { get; set; }
+    public double? ToolbarTop { get; set; }
 
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

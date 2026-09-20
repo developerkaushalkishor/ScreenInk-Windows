@@ -36,7 +36,7 @@ WinUI 3 was not selected because transparent always-on-top overlay windows and c
 | --- | --- | --- | --- |
 | W0 — Repository/tooling | Solution, Core/App/Test projects, CI, scripts, MIT docs | Windows CI restores, tests and builds | Cross-build and core tests pass; Windows CI run pending |
 | W1 — Overlay MVP | Per-monitor overlays, click-through, pen, colors, widths, undo/redo/clear | Draw on every monitor; normal mode never traps input | Implemented in source; hardware check pending |
-| W2 — Essential drawing | Highlighter, whole-stroke eraser, settings, 24-color palette | Undo restores one eraser gesture; restart restores preferences | Engine implemented; full palette UI pending |
+| W2 — Essential drawing | Highlighter, whole-stroke eraser, settings, 24-color palette | Undo restores one eraser gesture; restart restores preferences | Implemented in source; hardware check pending |
 | W3 — Presentation | Fade, laser, halo, click animation, global toggle, ink visibility | Smooth effects at 60 FPS; no input theft | Fade/laser/hotkey/visibility implemented; halo/click pending |
 | W4 — Shapes | Line, arrow, rounded rectangle, ellipse, diamond, recognition | Correct every drag direction and mixed DPI | Implemented in source; polish pending |
 | W5 — Text and transforms | Inline editor, fonts/alignment, single/multi selection, move/resize/recolor | Exact hit-testing; each gesture is one Undo operation | Text/single move implemented; inline/multi/resize pending |
@@ -53,7 +53,7 @@ WinUI 3 was not selected because transparent always-on-top overlay windows and c
 4. Add cursor halo and global left-click ripple with an opt-in low-level hook.
 5. Add 24-color/font/alignment popovers and tool-specific cursor artwork.
 6. Add region selection, clipboard output and Windows Graphics Capture evaluation.
-7. Add toolbar fly-in/fade, saved drag position and exact per-monitor edge trigger in WPF DIPs.
+7. Validate toolbar fly-in/fade, saved physical placement, More/palette interactions and exact per-monitor edge trigger on Windows hardware.
 8. Add pressure/stylus sampling and performance profiling for long sessions.
 9. Add an original Windows `.ico`, Authenticode signing and release workflow.
 

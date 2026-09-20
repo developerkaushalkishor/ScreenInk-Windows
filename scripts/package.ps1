@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $output = Join-Path $root "artifacts/ScreenInk-$Runtime"
-$zip = Join-Path $root "artifacts/ScreenInk-0.1.0-$Runtime.zip"
+$zip = Join-Path $root "artifacts/ScreenInk-0.2.0-$Runtime.zip"
 Remove-Item $output -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $zip -Force -ErrorAction SilentlyContinue
 dotnet publish "$root/src/ScreenInk.App/ScreenInk.App.csproj" -c Release -r $Runtime `

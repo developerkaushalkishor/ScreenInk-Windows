@@ -7,12 +7,12 @@
 ScreenInk for Windows is the native Windows port of the open-source macOS screen annotation tool. It uses .NET 8, WPF and focused Win32 interop. The app is offline, has no account or analytics service, and targets Windows 10 version 2004 or newer plus Windows 11.
 
 <p align="center">
-  <a href="https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.1.0/ScreenInk-0.1.0-win-x64.zip"><strong>Download for Windows (x64)</strong></a>
+  <a href="https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.2.0/ScreenInk-0.2.0-win-x64.zip"><strong>Download for Windows (x64)</strong></a>
   ·
-  <a href="https://github.com/developerkaushalkishor/mac-tools/releases/download/v0.15.2/ScreenInk-0.15.2-macOS-arm64.zip">Download for macOS (Apple Silicon)</a>
+  <a href="https://github.com/developerkaushalkishor/mac-tools/releases/download/v0.15.3/ScreenInk-0.15.3-macOS-arm64.zip">Download for macOS (Apple Silicon)</a>
 </p>
 
-> **Status: 0.1.0 developer preview.** The solution cross-builds successfully and core tests pass. Interaction validation must still run on a Windows machine because WPF cannot execute on macOS.
+> **Status: 0.2.0 developer preview.** The solution cross-builds successfully and core tests pass. Interaction validation must still run on a Windows machine because WPF cannot execute on macOS.
 
 ## Implemented foundation
 
@@ -27,7 +27,9 @@ ScreenInk for Windows is the native Windows port of the open-source macOS screen
 - Fading ink cleanup and redundant point sampling.
 - Whiteboard and blackboard backgrounds.
 - Full-display PNG screenshot save.
-- Floating top-center toolbar with idle hide and edge reveal.
+- Mac-style vector icon toolbar with press feedback, smooth fly-in/fade and stable one-shot top-edge reveal.
+- Responsive quick colors plus Shapes, 24-color Palette and More popovers for narrow displays.
+- Saved physical-pixel toolbar placement with per-monitor DPI scaling and display-disconnect recovery.
 - Per-monitor overlay reconciliation for connect/disconnect.
 - Tray icon recovery, master enable/disable and global `Ctrl+Alt+Shift+D` drawing toggle.
 - Saved settings under `%LOCALAPPDATA%\ScreenInk\settings.json`.
@@ -53,7 +55,7 @@ The output is written under `artifacts/`. The current artifact is unsigned; publ
 
 ## Try the portable build without development tools
 
-1. [Download `ScreenInk-0.1.0-win-x64.zip`](https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.1.0/ScreenInk-0.1.0-win-x64.zip).
+1. [Download `ScreenInk-0.2.0-win-x64.zip`](https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.2.0/ScreenInk-0.2.0-win-x64.zip).
 2. Verify its SHA-256 value against the accompanying `.sha256` file.
 3. Extract the ZIP and launch `ScreenInk.exe`.
 4. Use the tray icon to enable/disable ScreenInk or recover the toolbar.
@@ -77,7 +79,7 @@ For macOS, use the [ScreenInk macOS repository](https://github.com/developerkaus
 
 - The source cross-build and core tests pass on macOS, but the executable has not yet been exercised on Windows hardware.
 - Region screenshots, marquee multi-selection, resize handles, custom-region boards, cursor halo, click animation and polished custom cursors remain in the parity backlog.
-- DPI conversion between WinForms monitor pixels and WPF DIPs requires real mixed-scaling validation.
+- Per-monitor DPI-aware physical placement is implemented but still requires real mixed-scaling validation.
 - The first public binary must be code-signed; the CI artifact is for testing only.
 
 ## License
