@@ -28,6 +28,7 @@ internal static class Program
             TestTextEditor();
             TestToolbar();
             TestCombinedApp();
+            TestMultipleCanvases();
             Console.WriteLine("All Windows UI regression checks passed.");
             return 0;
         }
@@ -231,6 +232,53 @@ internal static class Program
         MouseAt(more, new Point(more.ActualWidth / 2, more.ActualHeight / 2)); Pump();
         Assert(toolbar.IsInteractionActive, "More popover must hold auto-hide open.");
         Console.WriteLine("PASS combined app: physical toolbar input, drawing, z-order and normal mode");
+    }
+
+    private static void TestMultipleCanvases()
+    {
+        var screen = DisplayService.GetDisplays().First();
+        var state = new AppState(new AppSettings { AutoHideToolbar = false });
+        var a = screen with { Id = "test-left", Width = screen.Width / 2, DpiScaleX = 1, DpiScaleY = 1 };
+        var b = screen with { Id = "test-right", Left = screen.Left + screen.Width / 2,
+            Width = screen.Width / 2, DpiScaleX = 1.5, DpiScaleY = 1.5, Primary = false };
+        var first = new OverlayWindow(a, state);
+        var second = new OverlayWindow(b, state);
+        try
+        {
+            first.Show(); second.Show(); state.SelectTool(DrawingTool.Pen); Pump();
+            foreach (var overlay in new[] { first, second, first, second })
+            {
+                AssertFrame(overlay);
+                var before = overlay.Surface.Store.Strokes.Count;
+                var point = overlay.Surface.PointToScreen(new Point(70, 170));
+                Assert(WindowFromPoint(new NativePoint { X = (int)point.X, Y = (int)point.Y }) ==
+                    new WindowInteropHelper(overlay).Handle, "Every canvas must accept input without reselecting Pen.");
+                Drag(overlay.Surface, new Point(70, 170), new Point(160, 220));
+                Assert(overlay.Surface.Store.Strokes.Count == before + 1, "Switching canvases must preserve global drawing mode.");
+            }
+            state.SetDrawing(false); Pump();
+            foreach (var overlay in new[] { first, second })
+                Assert((NativeMethods.GetWindowLongPtr(new WindowInteropHelper(overlay).Handle, NativeMethods.GwlExStyle).ToInt64()
+                    & NativeMethods.WsExTransparent) != 0, "Normal mode must pass through on every canvas.");
+            // Emulate native placement drift after a DPI/layout notification.
+            NativeMethods.SetWindowPos(new WindowInteropHelper(second).Handle, 0, (int)a.Left, (int)a.Top,
+                180, 180, NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate);
+            second.UpdateDisplay(b); Pump(); AssertFrame(second);
+            // Negative desktop origins must not be normalized to the primary screen.
+            first.UpdateDisplay(a with { Left = -400, Top = -180, Width = 300, Height = 250 }); Pump();
+            AssertFrame(first);
+            Console.WriteLine("PASS separate canvases: first-click drawing, global normal mode, placement repair and negative origins");
+        }
+        finally { first.Close(); second.Close(); }
+    }
+
+    private static void AssertFrame(OverlayWindow overlay)
+    {
+        var display = overlay.Display;
+        Assert(NativeMethods.GetWindowRect(new WindowInteropHelper(overlay).Handle, out var rect) &&
+            rect.Left == display.Left && rect.Top == display.Top && rect.Right - rect.Left == display.Width &&
+            rect.Bottom - rect.Top == display.Height,
+            $"Canvas {display.Id} must cover its physical display: expected {display}; actual {rect.Left},{rect.Top},{rect.Right},{rect.Bottom}.");
     }
 
     private static void Click(FrameworkElement element)
