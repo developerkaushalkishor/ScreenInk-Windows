@@ -32,3 +32,18 @@ The first repair test caught a toolbar logical-parent exception that a cross-bui
 - Confirm board element resize/recolor and multi-selection behavior on dense teaching material.
 
 Reference: [Microsoft layered-window hit testing](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features).
+
+## Extended-display update (0.3.0-preview.2)
+
+The user reported that drawing worked only on the active monitor in Windows Extend mode. The existing single-monitor tests did not reproduce that physical setup.
+
+Changes:
+- Enumerate current native monitor rectangles and IDs directly instead of retaining WinForms screen snapshots.
+- Reconcile each canvas against its actual HWND rectangle even when the display descriptor has not changed.
+- Reapply placement after WPF load/render, DPI, size and activation changes; preserve negative desktop origins.
+- React to display-settings notifications, with a periodic reconciliation fallback.
+- Route Undo/Redo/Clear to the last drawing display; board/screenshot scope remains the toolbar display.
+- New displays inherit the current global drawing/normal mode. Removed displays release their canvas without clearing other displays.
+- Add a tray command to copy display/frame/DPI diagnostics if a hardware-specific failure persists.
+
+Verification uses real Windows windows/mouse input on a runner with synthetic display partitions. It exercises simultaneous canvases, switching without reselecting a tool, geometry drift, negative origins, history isolation and reconnection. Physical extended monitors with different DPI settings remain a manual acceptance check; the exact reported hardware failure has not been reproduced on the runner.

@@ -59,6 +59,7 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
         };
         _animationTimer.Tick += (_, _) => RefreshAnimation();
         _animationTimer.Start();
+        OnStateChanged();
     }
 
     private static double Now => Environment.TickCount64 / 1000.0;

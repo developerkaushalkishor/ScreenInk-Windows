@@ -264,6 +264,10 @@ internal static class Program
                 Drag(overlay.Surface, new Point(70, 170), new Point(160, 220));
                 Assert(overlay.Surface.Store.Strokes.Count == before + 1, "Switching canvases must preserve global drawing mode.");
             }
+            state.SelectTool(DrawingTool.Eraser);
+            var added = new OverlayWindow(b with { Id = "cursor-inheritance" }, state);
+            try { Assert(added.Surface.Cursor == ToolCursors.For(DrawingTool.Eraser), "A new canvas must inherit the selected tool cursor immediately."); }
+            finally { added.Close(); }
             state.SetDrawing(false); Pump();
             foreach (var overlay in new[] { first, second })
                 Assert((NativeMethods.GetWindowLongPtr(new WindowInteropHelper(overlay).Handle, NativeMethods.GwlExStyle).ToInt64()

@@ -25,6 +25,7 @@ internal sealed class AppController : IDisposable
     private IReadOnlyList<DisplayInfo> _displays = [];
     private readonly Func<IReadOnlyList<DisplayInfo>> _getDisplays;
     private string? _interactionDisplayId;
+    private bool _disposed;
 
     internal AppController(Func<IReadOnlyList<DisplayInfo>>? getDisplays = null)
     {
@@ -71,12 +72,19 @@ internal sealed class AppController : IDisposable
         CreateTrayIcon();
         InitializeToolbarPlacement();
         ApplyState();
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         _displayTimer.Start();
         _toolbarTimer.Start();
     }
 
+    private void OnDisplaySettingsChanged(object? sender, EventArgs args)
+    {
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(ReconcileDisplays));
+    }
+
     internal void ReconcileDisplays()
     {
+        if (_disposed) return;
         var displays = _getDisplays();
         var previousDisplays = _displays;
         if (displays.Count == 0) return;
@@ -314,6 +322,8 @@ internal sealed class AppController : IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _displayTimer.Stop();
         _toolbarTimer.Stop();
         _hotKey?.Dispose();
