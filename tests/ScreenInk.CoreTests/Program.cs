@@ -10,7 +10,8 @@ var tests = new (string Name, Action Run)[]
     ("responsive toolbar geometry", TestToolbarGeometry),
     ("edge reveal fires once per entry", TestToolbarReveal),
     ("history commands notify renderer", TestDocumentNotifications),
-    ("selection transforms preserve board ownership", TestSelectionTransform)
+    ("selection transforms preserve board ownership", TestSelectionTransform),
+    ("Mac-style shape contours are stable and closed", TestHandDrawnShapes)
 };
 
 foreach (var test in tests)
@@ -126,8 +127,14 @@ static void TestDocumentNotifications()
 static void TestSelectionTransform()
 {
     var board = Guid.NewGuid();
-    var stroke = Stroke(10) with { Kind = StrokeKind.Text, Text = "Test", FontSize = 20,
-        TextWidth = 100, ParentBoardId = board };
+    var stroke = Stroke(10) with
+    {
+        Kind = StrokeKind.Text,
+        Text = "Test",
+        FontSize = 20,
+        TextWidth = 100,
+        ParentBoardId = board
+    };
     var transformed = SelectionTransform.Apply(stroke, new InkRect(0, 0, 100, 100), new InkRect(20, 30, 200, 200));
     Equal(new InkPoint(40, 50), transformed.Points[0]);
     Equal(40d, transformed.FontSize);
@@ -137,4 +144,16 @@ static void TestSelectionTransform()
     store.Replace(new Dictionary<int, InkStroke> { [0] = transformed });
     store.Undo(); Equal(stroke, store.Strokes[0]);
     store.Redo(); Equal(transformed, store.Strokes[0]);
+}
+
+static void TestHandDrawnShapes()
+{
+    foreach (var kind in new[] { StrokeKind.Ellipse, StrokeKind.Rectangle, StrokeKind.Diamond })
+    {
+        var points = HandDrawnGeometry.Points(kind, new(20, 20), new(220, 120));
+        var reversed = HandDrawnGeometry.Points(kind, new(220, 120), new(20, 20));
+        Assert(points.SequenceEqual(reversed), "Shape contours must be stable in every drag direction.");
+        Assert(InkPoint.Distance(points[0], points[^1]) < .001, "Contours must close without endpoint artifacts.");
+        Assert(points.All(p => p.X >= 19 && p.X <= 221 && p.Y >= 19 && p.Y <= 121), "Wobble must remain subtle.");
+    }
 }

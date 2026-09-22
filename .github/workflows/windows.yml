@@ -19,6 +19,7 @@ jobs:
         shell: pwsh
         run: ./scripts/build.ps1
       - name: Windows native input and toolbar regression tests
+        timeout-minutes: 4
         shell: pwsh
         run: dotnet run --project tests/ScreenInk.WindowsTests/ScreenInk.WindowsTests.csproj -c Release
       - name: Upload UI evidence
@@ -34,5 +35,5 @@ jobs:
         with:
           name: ScreenInk-win-x64-unsigned
           path: |
-            artifacts/ScreenInk-0.2.1-win-x64.zip
-            artifacts/ScreenInk-0.2.1-win-x64-offline.zip
+            artifacts/ScreenInk-*-win-x64.zip*
+            artifacts/ScreenInk-*-win-x64-offline.zip*

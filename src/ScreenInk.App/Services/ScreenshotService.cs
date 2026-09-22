@@ -43,7 +43,8 @@ internal static class ScreenshotService
                 {
                     Filter = "PNG image (*.png)|*.png",
                     FileName = $"ScreenInk {DateTime.Now:yyyy-MM-dd 'at' HH.mm.ss}.png",
-                    AddExtension = true, DefaultExt = ".png"
+                    AddExtension = true,
+                    DefaultExt = ".png"
                 };
                 if (dialog.ShowDialog() == true)
                 {

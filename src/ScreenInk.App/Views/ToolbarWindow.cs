@@ -299,14 +299,23 @@ internal sealed class ToolbarWindow : Window
         });
         var boardButton = AddButton(grid, ToolbarIcon.Board, "Boards", (_, _) => { });
         var boards = new StackPanel { Margin = new Thickness(8) };
-        var scopes = new System.Windows.Controls.ComboBox { Width = 210, Margin = new Thickness(4),
-            ItemsSource = new[] { "This display", "All displays", "Draw a region" }, SelectedIndex = 0 };
+        var scopes = new System.Windows.Controls.ComboBox
+        {
+            Width = 210,
+            Margin = new Thickness(4),
+            ItemsSource = new[] { "This display", "All displays", "Draw a region" },
+            SelectedIndex = 0
+        };
         boards.Children.Add(scopes);
         foreach (var style in Enum.GetValues<BoardStyle>())
         {
             var captured = style;
-            var button = new Button { Content = style == BoardStyle.Screen ? "Remove boards" : style.ToString(),
-                Margin = new Thickness(4), Padding = new Thickness(8) };
+            var button = new Button
+            {
+                Content = style == BoardStyle.Screen ? "Remove boards" : style.ToString(),
+                Margin = new Thickness(4),
+                Padding = new Thickness(8)
+            };
             button.Click += (_, _) =>
             {
                 BoardRequested?.Invoke(captured, scopes.SelectedIndex == 1, scopes.SelectedIndex == 2);
@@ -344,9 +353,13 @@ internal sealed class ToolbarWindow : Window
     {
         var panel = new StackPanel { Width = 230, Margin = new Thickness(8) };
         panel.Children.Add(new TextBlock { Text = "Font", Foreground = Brushes.White });
-        var fonts = new System.Windows.Controls.ComboBox { ItemsSource = new[]
+        var fonts = new System.Windows.Controls.ComboBox
+        {
+            ItemsSource = new[]
             { "Segoe Print", "Segoe Script", "Comic Sans MS", "Segoe UI", "Arial", "Georgia", "Consolas" },
-            SelectedItem = _state.Settings.FontFamily, Margin = new Thickness(0, 6, 0, 10) };
+            SelectedItem = _state.Settings.FontFamily,
+            Margin = new Thickness(0, 6, 0, 10)
+        };
         fonts.SelectionChanged += (_, _) =>
         {
             if (fonts.SelectedItem is not string font) return;
@@ -355,16 +368,24 @@ internal sealed class ToolbarWindow : Window
         };
         panel.Children.Add(fonts);
         panel.Children.Add(new TextBlock { Text = "Text size", Foreground = Brushes.White });
-        var sizes = new System.Windows.Controls.ComboBox { ItemsSource = new double[] { 16, 20, 24, 28, 36, 48, 64, 96 },
-            SelectedItem = _state.Settings.FontSize, Margin = new Thickness(0, 6, 0, 10) };
+        var sizes = new System.Windows.Controls.ComboBox
+        {
+            ItemsSource = new double[] { 16, 20, 24, 28, 36, 48, 64, 96 },
+            SelectedItem = _state.Settings.FontSize,
+            Margin = new Thickness(0, 6, 0, 10)
+        };
         sizes.SelectionChanged += (_, _) =>
         {
             if (sizes.SelectedItem is not double size) return;
             _state.Settings.FontSize = size; _state.Settings.Save(); _state.Notify();
         };
         panel.Children.Add(sizes);
-        var alignment = new System.Windows.Controls.ComboBox { ItemsSource = Enum.GetValues<InkTextAlignment>(),
-            SelectedItem = _state.Settings.TextAlignment, Margin = new Thickness(0, 6, 0, 10) };
+        var alignment = new System.Windows.Controls.ComboBox
+        {
+            ItemsSource = Enum.GetValues<InkTextAlignment>(),
+            SelectedItem = _state.Settings.TextAlignment,
+            Margin = new Thickness(0, 6, 0, 10)
+        };
         alignment.SelectionChanged += (_, _) =>
         {
             if (alignment.SelectedItem is not InkTextAlignment value) return;
@@ -460,9 +481,13 @@ internal sealed class ToolbarWindow : Window
             content.Children.Add(artwork);
             content.Children.Add(new TextBlock
             {
-                Text = tooltip.Split(" — ")[0], FontSize = 10, MaxWidth = 68,
-                TextTrimming = TextTrimming.CharacterEllipsis, TextAlignment = TextAlignment.Center,
-                Foreground = Brushes.White, Margin = new Thickness(0, 5, 0, 0)
+                Text = tooltip.Split(" — ")[0],
+                FontSize = 10,
+                MaxWidth = 68,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextAlignment = TextAlignment.Center,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 5, 0, 0)
             });
             button.Content = content;
         }
@@ -597,7 +622,7 @@ internal sealed class ToolbarWindow : Window
         System.Windows.Automation.AutomationProperties.SetItemStatus(button, selected ? "Selected" : "Not selected");
     }
 
-    private void ActivateTopmostWithoutFocus()
+    internal void ActivateTopmostWithoutFocus()
     {
         var handle = new WindowInteropHelper(this).EnsureHandle();
         NativeMethods.SetWindowPos(handle, NativeMethods.HwndTopmost, 0, 0, 0, 0,

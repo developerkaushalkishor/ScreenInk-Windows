@@ -32,28 +32,17 @@ internal static class StrokeVisual
         var b = points[^1];
         var rect = new Rect(new Point(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y)),
             new Size(Math.Abs(b.X - a.X), Math.Abs(b.Y - a.Y)));
-        if (stroke.Kind == StrokeKind.Ellipse) return new EllipseGeometry(rect);
-        if (stroke.Kind is StrokeKind.Rectangle or StrokeKind.Board)
-            return new RectangleGeometry(rect, Math.Min(18, rect.Width * .14), Math.Min(18, rect.Height * .14));
-        if (stroke.Kind == StrokeKind.Diamond)
+        if (stroke.Kind == StrokeKind.Board) return new RectangleGeometry(rect, 16, 16);
+        if (stroke.Kind is StrokeKind.Ellipse or StrokeKind.Rectangle or StrokeKind.Diamond)
         {
-            Point[] corners = [new(rect.Left + rect.Width / 2, rect.Top),
-                new(rect.Right, rect.Top + rect.Height / 2),
-                new(rect.Left + rect.Width / 2, rect.Bottom),
-                new(rect.Left, rect.Top + rect.Height / 2)];
-            var rounded = new StreamGeometry();
-            using (var context = rounded.Open())
+            var contour = HandDrawnGeometry.Points(stroke.Kind, a, b);
+            var shape = new StreamGeometry();
+            using (var context = shape.Open())
             {
-                Point Before(int i) => Mix(corners[i], corners[(i + 3) % 4], .10);
-                Point After(int i) => Mix(corners[i], corners[(i + 1) % 4], .10);
-                context.BeginFigure(Before(0), true, true);
-                for (var i = 0; i < 4; i++)
-                {
-                    context.QuadraticBezierTo(corners[i], After(i), true, true);
-                    context.LineTo(Before((i + 1) % 4), true, true);
-                }
+                context.BeginFigure(new Point(contour[0].X, contour[0].Y), true, true);
+                context.PolyLineTo(contour.Skip(1).Select(p => new Point(p.X, p.Y)).ToArray(), true, true);
             }
-            return rounded;
+            return shape;
         }
         if (points.Count == 1)
             return new EllipseGeometry(new Point(a.X, a.Y), .01, .01);
@@ -110,6 +99,4 @@ internal static class StrokeVisual
              geometry.FillContains(location));
     }
 
-    private static Point Mix(Point a, Point b, double ratio) =>
-        new(a.X + (b.X - a.X) * ratio, a.Y + (b.Y - a.Y) * ratio);
 }

@@ -17,10 +17,14 @@ internal static class ToolCursors
         if (Cache.TryGetValue(tool, out var cursor)) return cursor;
         var icon = tool switch
         {
-            DrawingTool.Eraser => ToolbarIcon.Eraser, DrawingTool.Highlighter => ToolbarIcon.Highlighter,
-            DrawingTool.Laser => ToolbarIcon.Laser, DrawingTool.Line => ToolbarIcon.Line,
-            DrawingTool.Arrow => ToolbarIcon.Arrow, DrawingTool.Rectangle => ToolbarIcon.Rectangle,
-            DrawingTool.Ellipse => ToolbarIcon.Ellipse, DrawingTool.Diamond => ToolbarIcon.Diamond,
+            DrawingTool.Eraser => ToolbarIcon.Eraser,
+            DrawingTool.Highlighter => ToolbarIcon.Highlighter,
+            DrawingTool.Laser => ToolbarIcon.Laser,
+            DrawingTool.Line => ToolbarIcon.Line,
+            DrawingTool.Arrow => ToolbarIcon.Arrow,
+            DrawingTool.Rectangle => ToolbarIcon.Rectangle,
+            DrawingTool.Ellipse => ToolbarIcon.Ellipse,
+            DrawingTool.Diamond => ToolbarIcon.Diamond,
             _ => ToolbarIcon.Pen
         };
         var visual = new DrawingVisual();

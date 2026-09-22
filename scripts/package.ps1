@@ -27,6 +27,7 @@ function New-ScreenInkPackage {
         --self-contained $selfContainedValue `
         -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false `
         -o $output
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
     Compress-Archive -Path "$output/*" -DestinationPath $zip
     $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -Path "$zip.sha256" -Value "$hash  $(Split-Path $zip -Leaf)"

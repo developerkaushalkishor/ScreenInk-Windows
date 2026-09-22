@@ -89,6 +89,7 @@ internal sealed class AppController : IDisposable
                 continue;
             }
             var overlay = new OverlayWindow(display, _state);
+            overlay.Activated += (_, _) => { if (_toolbar?.IsVisible == true) _toolbar.ActivateTopmostWithoutFocus(); };
             overlay.Surface.RequestNormalMode += () => _state.SetDrawing(false);
             _overlays.Add(display.Id, overlay);
             if (_state.Settings.IsEnabled) overlay.Show();

@@ -37,6 +37,7 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
     private readonly List<(InkPoint Point, double Time)> _clicks = [];
     private bool _leftDown;
     private bool _effectsWereVisible;
+    private int? _editingIndex;
 
     internal StrokeStore Store { get; } = new();
     internal event Action? RequestNormalMode;
@@ -75,7 +76,8 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
             Store.Replace(_selected.Where(i => i < Store.Strokes.Count && Store.Strokes[i].Kind == StrokeKind.Text)
                 .ToDictionary(i => i, i => Store.Strokes[i] with
                 {
-                    FontFamily = _state.Settings.FontFamily, FontSize = _state.Settings.FontSize,
+                    FontFamily = _state.Settings.FontFamily,
+                    FontSize = _state.Settings.FontSize,
                     TextAlignment = _state.Settings.TextAlignment
                 }));
             _lastFont = _state.Settings.FontFamily;
@@ -124,8 +126,13 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
                 ? Store.Strokes[textIndex] : CreateStroke([_start], StrokeKind.Text);
             var origin = original.Points[0];
             var dialog = new TextEntryWindow(original, PointToScreen(new Point(origin.X, origin.Y)),
-                Math.Max(40, ActualWidth - origin.X - 8));
-            if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.Value))
+                Math.Max(40, (_drawingBounds?.Right ?? ActualWidth) - origin.X - 8));
+            _editingIndex = existing is { } index && Store.Strokes[index].Kind == StrokeKind.Text ? existing : null;
+            InvalidateVisual();
+            bool saved;
+            try { saved = dialog.ShowDialog() == true; }
+            finally { _editingIndex = null; InvalidateVisual(); }
+            if (saved && !string.IsNullOrWhiteSpace(dialog.Value))
             {
                 var updated = original with { Text = dialog.Value, TextWidth = dialog.TextWidth };
                 if (existing is { } i && Store.Strokes[i].Kind == StrokeKind.Text)
@@ -199,6 +206,7 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
             if (bounds.Width >= 80 && bounds.Height >= 60) AppendBoard(style, bounds);
             _boardGesture = false;
             _pendingBoard = null;
+            Cursor = ToolCursors.For(_state.Settings.Tool);
             _currentPoints = null;
             InvalidateVisual();
             return;
@@ -254,7 +262,7 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
         var now = Now;
         for (var index = 0; index < Store.Strokes.Count; index++)
         {
-            if (_pendingErase.Contains(index) || Store.Strokes[index].Kind == StrokeKind.Board) continue;
+            if (_editingIndex == index || _pendingErase.Contains(index) || Store.Strokes[index].Kind == StrokeKind.Board) continue;
             DrawContainedStroke(dc, _selectionPreview.GetValueOrDefault(index, Store.Strokes[index]), now);
         }
         if (_currentPoints is { Count: > 0 })
@@ -290,7 +298,9 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
 
     private void AppendBoard(BoardStyle style, Rect rect) => Store.Append(new InkStroke
     {
-        Kind = StrokeKind.Board, BoardStyle = style, Width = 0,
+        Kind = StrokeKind.Board,
+        BoardStyle = style,
+        Width = 0,
         Points = [new InkPoint(rect.Left, rect.Top), new InkPoint(rect.Right, rect.Bottom)]
     });
 

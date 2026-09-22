@@ -11,7 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ScreenInk</AssemblyName>
     <RootNamespace>ScreenInk.App</RootNamespace>
-    <Version>0.2.1</Version>
+    <Version>0.3.0-preview.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ScreenInk.Core\ScreenInk.Core.csproj" />

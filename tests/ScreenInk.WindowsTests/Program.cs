@@ -27,6 +27,7 @@ internal static class Program
             TestNativeInput();
             TestTextEditor();
             TestToolbar();
+            TestCombinedApp();
             Console.WriteLine("All Windows UI regression checks passed.");
             return 0;
         }
@@ -55,8 +56,15 @@ internal static class Program
         var display = DisplayService.GetDisplays().First();
         var settings = new AppSettings { AutoHideToolbar = false };
         var state = new AppState(settings);
-        var behind = new Window { Left = 20, Top = 20, Width = 500, Height = 400,
-            Background = Brushes.White, Title = "ScreenInk test background" };
+        var behind = new Window
+        {
+            Left = 20,
+            Top = 20,
+            Width = 500,
+            Height = 400,
+            Background = Brushes.White,
+            Title = "ScreenInk test background"
+        };
         var overlay = new OverlayWindow(display, state);
         overlay.Surface.RequestNormalMode += () => state.SetDrawing(false);
         try
@@ -138,8 +146,15 @@ internal static class Program
 
     private static void TestTextEditor()
     {
-        var stroke = new InkStroke { Kind = StrokeKind.Text, Points = [new(80, 80)], Text = "Handwriting test",
-            FontFamily = "Segoe Print", FontSize = 28, TextAlignment = InkTextAlignment.Left };
+        var stroke = new InkStroke
+        {
+            Kind = StrokeKind.Text,
+            Points = [new(80, 80)],
+            Text = "Handwriting test",
+            FontFamily = "Segoe Print",
+            FontSize = 28,
+            TextAlignment = InkTextAlignment.Left
+        };
         var editor = new TextEntryWindow(stroke, new Point(120, 140), 320);
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         timer.Tick += (_, _) =>
@@ -155,7 +170,7 @@ internal static class Program
                 Save(Render((Border)editor.Content), "text-editor.png");
                 box.Text = "Edited text";
                 box.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(box), 0, Key.Enter)
-                    { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+                { RoutedEvent = Keyboard.PreviewKeyDownEvent });
             }
             catch { editor.Close(); throw; }
         };
@@ -192,6 +207,37 @@ internal static class Program
             Console.WriteLine("PASS toolbar actions, selection feedback, reveal cancellation and narrow display layout");
         }
         finally { toolbar.Close(); }
+    }
+
+    private static void TestCombinedApp()
+    {
+        using var controller = new ScreenInk.App.AppController();
+        controller.Start(); Pump();
+        var toolbar = Application.Current.Windows.OfType<ToolbarWindow>().Single();
+        var overlay = Application.Current.Windows.OfType<OverlayWindow>().First();
+        var row = (StackPanel)((Border)toolbar.Content).Child;
+        var pen = row.Children.OfType<Button>().First(b => b.ToolTip?.ToString()?.StartsWith("Pen —") == true);
+        Click(pen); Pump();
+        Drag(overlay.Surface, new Point(150, 250), new Point(290, 290));
+        Assert(overlay.Surface.Store.Strokes.Count == 1, "Combined app must draw after physically clicking Pen.");
+        var normal = row.Children.OfType<Button>().First(b => b.ToolTip?.ToString()?.StartsWith("Normal mode") == true);
+        var location = normal.PointToScreen(new Point(normal.ActualWidth / 2, normal.ActualHeight / 2));
+        Assert(WindowFromPoint(new NativePoint { X = (int)location.X, Y = (int)location.Y }) == new WindowInteropHelper(toolbar).Handle,
+            "Drawing activation must not cover toolbar with the canvas.");
+        Click(normal); Pump();
+        Assert((NativeMethods.GetWindowLongPtr(new WindowInteropHelper(overlay).Handle, NativeMethods.GwlExStyle).ToInt64()
+            & NativeMethods.WsExTransparent) != 0, "Physical normal-mode button must restore click-through.");
+        var more = row.Children.OfType<Button>().First(b => b.ToolTip?.ToString()?.StartsWith("More tools") == true);
+        MouseAt(more, new Point(more.ActualWidth / 2, more.ActualHeight / 2)); Pump();
+        Assert(toolbar.IsInteractionActive, "More popover must hold auto-hide open.");
+        Console.WriteLine("PASS combined app: physical toolbar input, drawing, z-order and normal mode");
+    }
+
+    private static void Click(FrameworkElement element)
+    {
+        MouseAt(element, new Point(element.ActualWidth / 2, element.ActualHeight / 2));
+        mouse_event(0x0002, 0, 0, 0, 0); Pump(30);
+        mouse_event(0x0004, 0, 0, 0, 0); Pump();
     }
 
     private static void Drag(FrameworkElement surface, Point start, Point end)

@@ -30,12 +30,15 @@ internal sealed class TextEntryWindow : Window
         _textBox = new System.Windows.Controls.TextBox
         {
             Text = stroke.Text ?? string.Empty,
-            FontFamily = new FontFamily(stroke.FontFamily), FontSize = stroke.FontSize,
+            FontFamily = new FontFamily(stroke.FontFamily),
+            FontSize = stroke.FontSize,
             Foreground = new SolidColorBrush(Color.FromRgb((byte)(stroke.Color >> 16),
                 (byte)(stroke.Color >> 8), (byte)stroke.Color)),
             Background = new SolidColorBrush(Color.FromArgb(24, 20, 20, 24)),
-            BorderThickness = new Thickness(0), Padding = new Thickness(0),
-            AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
             TextAlignment = stroke.TextAlignment switch
             {
                 InkTextAlignment.Center => TextAlignment.Center,
