@@ -29,6 +29,7 @@ internal static class Program
             TestToolbar();
             TestCombinedApp();
             TestMultipleCanvases();
+            TestDisplayReconciliation();
             Console.WriteLine("All Windows UI regression checks passed.");
             return 0;
         }
@@ -239,8 +240,15 @@ internal static class Program
         var screen = DisplayService.GetDisplays().First();
         var state = new AppState(new AppSettings { AutoHideToolbar = false });
         var a = screen with { Id = "test-left", Width = screen.Width / 2, DpiScaleX = 1, DpiScaleY = 1 };
-        var b = screen with { Id = "test-right", Left = screen.Left + screen.Width / 2,
-            Width = screen.Width / 2, DpiScaleX = 1.5, DpiScaleY = 1.5, Primary = false };
+        var b = screen with
+        {
+            Id = "test-right",
+            Left = screen.Left + screen.Width / 2,
+            Width = screen.Width / 2,
+            DpiScaleX = 1.5,
+            DpiScaleY = 1.5,
+            Primary = false
+        };
         var first = new OverlayWindow(a, state);
         var second = new OverlayWindow(b, state);
         try
@@ -270,6 +278,47 @@ internal static class Program
             Console.WriteLine("PASS separate canvases: first-click drawing, global normal mode, placement repair and negative origins");
         }
         finally { first.Close(); second.Close(); }
+    }
+
+    private static void TestDisplayReconciliation()
+    {
+        var physical = DisplayService.GetDisplays().First();
+        var a = physical with { Id = "simulated-A", Width = physical.Width / 2, Primary = true };
+        var b = a with { Id = "simulated-B", Left = a.Left + a.Width, Primary = false };
+        IReadOnlyList<DisplayInfo> displays = new[] { a, b };
+        using var controller = new ScreenInk.App.AppController(() => displays);
+        controller.Start(); Pump();
+        OverlayWindow Canvas(string id) => Application.Current.Windows.OfType<OverlayWindow>().Single(w => w.Display.Id == id);
+        var toolbar = Application.Current.Windows.OfType<ToolbarWindow>().Single();
+        var row = (StackPanel)((Border)toolbar.Content).Child;
+        var pen = row.Children.OfType<Button>().First(button => button.ToolTip?.ToString()?.StartsWith("Pen —") == true);
+        Click(pen); Pump();
+        Drag(Canvas(a.Id).Surface, new Point(80, 220), new Point(160, 250));
+        Drag(Canvas(b.Id).Surface, new Point(80, 220), new Point(160, 250));
+        Assert(Canvas(a.Id).Surface.Store.Strokes.Count == 1 && Canvas(b.Id).Surface.Store.Strokes.Count == 1,
+            "Both managed canvases must draw after a single tool selection.");
+        var undo = row.Children.OfType<Button>().First(button => button.ToolTip?.ToString()?.StartsWith("Undo") == true);
+        // Test command routing even when narrow-toolbar layout moves this action into More.
+        undo.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump();
+        Assert(Canvas(a.Id).Surface.Store.Strokes.Count == 1 && Canvas(b.Id).Surface.Store.Strokes.Count == 0,
+            "Undo must target the last drawing display even when toolbar remains on another display.");
+        var second = Canvas(b.Id);
+        NativeMethods.SetWindowPos(new WindowInteropHelper(second).Handle, 0, (int)a.Left, (int)a.Top,
+            160, 140, NativeMethods.SwpNoActivate | NativeMethods.SwpNoZOrder);
+        controller.ReconcileDisplays(); Pump(); AssertFrame(second);
+        displays = new[] { a }; controller.ReconcileDisplays(); Pump();
+        Assert(Application.Current.Windows.OfType<OverlayWindow>().Count() == 1, "Disconnect must remove only the missing canvas.");
+        Assert(Canvas(a.Id).Surface.Store.Strokes.Count == 1, "Other display ink must survive a disconnect.");
+        displays = new[] { a, b }; controller.ReconcileDisplays(); Pump();
+        AssertFrame(Canvas(b.Id));
+        Drag(Canvas(b.Id).Surface, new Point(100, 230), new Point(170, 270));
+        Assert(Canvas(b.Id).Surface.Store.Strokes.Count == 1, "Hot-plugged canvas must inherit the active drawing tool.");
+        var normal = row.Children.OfType<Button>().First(button => button.ToolTip?.ToString()?.StartsWith("Normal mode") == true);
+        Click(normal); Pump();
+        foreach (var canvas in Application.Current.Windows.OfType<OverlayWindow>())
+            Assert((NativeMethods.GetWindowLongPtr(new WindowInteropHelper(canvas).Handle, NativeMethods.GwlExStyle).ToInt64()
+                & NativeMethods.WsExTransparent) != 0, "Normal mode must apply across reconnected canvases.");
+        Console.WriteLine("PASS simulated extended topology: managed input, history routing, drift repair, disconnect and reconnect");
     }
 
     private static void AssertFrame(OverlayWindow overlay)

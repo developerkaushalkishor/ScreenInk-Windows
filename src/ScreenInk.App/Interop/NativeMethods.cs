@@ -36,6 +36,27 @@ internal static partial class NativeMethods
         internal int Bottom;
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct MonitorInfo
+    {
+        internal int Size;
+        internal NativeRect Monitor;
+        internal NativeRect Work;
+        internal uint Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        internal string Device;
+    }
+
+    internal delegate bool MonitorCallback(nint monitor, nint dc, ref NativeRect rect, nint data);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool EnumDisplayMonitors(nint dc, nint clip, MonitorCallback callback, nint data);
+
+    [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
+
     [LibraryImport("user32.dll")]
     internal static partial short GetAsyncKeyState(int key);
 

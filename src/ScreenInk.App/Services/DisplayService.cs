@@ -1,4 +1,4 @@
-using System.Windows.Forms;
+using System.Runtime.InteropServices;
 using ScreenInk.App.Interop;
 
 namespace ScreenInk.App.Services;
@@ -11,22 +11,25 @@ internal readonly record struct DisplayInfo(string Id, double Left, double Top,
 
 internal static class DisplayService
 {
-    internal static IReadOnlyList<DisplayInfo> GetDisplays() => Screen.AllScreens.Select(screen =>
+    internal static IReadOnlyList<DisplayInfo> GetDisplays()
     {
-        var center = new NativeMethods.NativePoint
+        // Read the current desktop topology directly; do not retain WinForms Screen snapshots.
+        var displays = new List<DisplayInfo>();
+        NativeMethods.MonitorCallback callback = (nint monitor, nint dc, ref NativeMethods.NativeRect bounds, nint data) =>
         {
-            X = screen.Bounds.Left + (screen.Bounds.Width / 2),
-            Y = screen.Bounds.Top + (screen.Bounds.Height / 2)
+            var info = new NativeMethods.MonitorInfo { Size = Marshal.SizeOf<NativeMethods.MonitorInfo>(), Device = string.Empty };
+            if (!NativeMethods.GetMonitorInfo(monitor, ref info)) return true;
+            var rect = info.Monitor;
+            if (rect.Right <= rect.Left || rect.Bottom <= rect.Top) return true;
+            var scaleX = 1d; var scaleY = 1d;
+            if (NativeMethods.GetDpiForMonitor(monitor, 0, out var dpiX, out var dpiY) == 0)
+            { scaleX = Math.Max(1, dpiX / 96d); scaleY = Math.Max(1, dpiY / 96d); }
+            displays.Add(new DisplayInfo(info.Device, rect.Left, rect.Top, rect.Right - rect.Left,
+                rect.Bottom - rect.Top, (info.Flags & 1) != 0, scaleX, scaleY));
+            return true;
         };
-        var monitor = NativeMethods.MonitorFromPoint(center, NativeMethods.MonitorDefaultToNearest);
-        var scaleX = 1d;
-        var scaleY = 1d;
-        if (monitor != 0 && NativeMethods.GetDpiForMonitor(monitor, 0, out var dpiX, out var dpiY) == 0)
-        {
-            scaleX = Math.Max(1, dpiX / 96d);
-            scaleY = Math.Max(1, dpiY / 96d);
-        }
-        return new DisplayInfo(screen.DeviceName, screen.Bounds.Left, screen.Bounds.Top,
-            screen.Bounds.Width, screen.Bounds.Height, screen.Primary, scaleX, scaleY);
-    }).ToArray();
+        if (!NativeMethods.EnumDisplayMonitors(0, 0, callback, 0))
+            throw new InvalidOperationException("Windows could not enumerate the connected displays.");
+        return displays;
+    }
 }

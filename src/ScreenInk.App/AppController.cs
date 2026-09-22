@@ -1,4 +1,5 @@
 using System.Windows.Interop;
+using ScreenInk.App.Interop;
 using System.Windows.Threading;
 using ScreenInk.App.Models;
 using ScreenInk.App.Services;
@@ -22,9 +23,12 @@ internal sealed class AppController : IDisposable
     private bool _toolbarPlacementInitialized;
     private bool _wasEnabled;
     private IReadOnlyList<DisplayInfo> _displays = [];
+    private readonly Func<IReadOnlyList<DisplayInfo>> _getDisplays;
+    private string? _interactionDisplayId;
 
-    internal AppController()
+    internal AppController(Func<IReadOnlyList<DisplayInfo>>? getDisplays = null)
     {
+        _getDisplays = getDisplays ?? DisplayService.GetDisplays;
         _displayTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _displayTimer.Tick += (_, _) => ReconcileDisplays();
         _toolbarTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
@@ -40,9 +44,9 @@ internal sealed class AppController : IDisposable
             if (all) foreach (var overlay in _overlays.Values) overlay.Surface.SetBoard(style, false);
             else ActiveOverlay()?.Surface.SetBoard(style, region);
         };
-        _toolbar.UndoRequested += () => ActiveOverlay()?.Surface.Undo();
-        _toolbar.RedoRequested += () => ActiveOverlay()?.Surface.Redo();
-        _toolbar.ClearRequested += () => ActiveOverlay()?.Surface.Clear();
+        _toolbar.UndoRequested += () => DrawingOverlay()?.Surface.Undo();
+        _toolbar.RedoRequested += () => DrawingOverlay()?.Surface.Redo();
+        _toolbar.ClearRequested += () => DrawingOverlay()?.Surface.Clear();
         _toolbar.ScreenshotRequested += async (region, clipboard) =>
         {
             if (_toolbar.IsCommandActive || ActiveOverlay() is not { } overlay) return;
@@ -71,9 +75,11 @@ internal sealed class AppController : IDisposable
         _toolbarTimer.Start();
     }
 
-    private void ReconcileDisplays()
+    internal void ReconcileDisplays()
     {
-        var displays = DisplayService.GetDisplays();
+        var displays = _getDisplays();
+        var previousDisplays = _displays;
+        if (displays.Count == 0) return;
         _displays = displays;
         var activeIds = displays.Select(display => display.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var orphan in _overlays.Keys.Where(id => !activeIds.Contains(id)).ToArray())
@@ -85,19 +91,30 @@ internal sealed class AppController : IDisposable
         {
             if (_overlays.TryGetValue(display.Id, out var existing))
             {
-                if (existing.Display != display) existing.UpdateDisplay(display);
+                existing.UpdateDisplay(display);
                 continue;
             }
             var overlay = new OverlayWindow(display, _state);
             overlay.Activated += (_, _) => { if (_toolbar?.IsVisible == true) _toolbar.ActivateTopmostWithoutFocus(); };
+            overlay.AddHandler(System.Windows.Input.Mouse.PreviewMouseDownEvent,
+                new System.Windows.Input.MouseButtonEventHandler((_, _) => _interactionDisplayId = display.Id), true);
             overlay.Surface.RequestNormalMode += () => _state.SetDrawing(false);
             _overlays.Add(display.Id, overlay);
             if (_state.Settings.IsEnabled) overlay.Show();
         }
 
         if (_toolbar is null || !_toolbarPlacementInitialized || displays.Count == 0) return;
-        if (displays.Any(display => string.Equals(display.Id, _toolbar.DisplayId,
-            StringComparison.OrdinalIgnoreCase))) return;
+        var toolbarDisplay = displays.FirstOrDefault(display => string.Equals(display.Id, _toolbar.DisplayId,
+            StringComparison.OrdinalIgnoreCase));
+        if (toolbarDisplay.Width > 0)
+        {
+            if (!previousDisplays.Contains(toolbarDisplay))
+            {
+                _toolbar.ConfigureForDisplay(toolbarDisplay);
+                ClampAndPersistToolbar(toolbarDisplay);
+            }
+            return;
+        }
         var fallback = displays.FirstOrDefault(display => display.Primary);
         if (fallback.Width <= 0) fallback = displays[0];
         _toolbar.PlaceTopCenter(fallback);
@@ -107,7 +124,7 @@ internal sealed class AppController : IDisposable
     private void InitializeToolbarPlacement()
     {
         if (_toolbar is null) return;
-        var displays = DisplayService.GetDisplays();
+        var displays = _getDisplays();
         if (displays.Count == 0) return;
         var selected = displays.FirstOrDefault(display => string.Equals(display.Id,
             _state.Settings.ToolbarDisplayId, StringComparison.OrdinalIgnoreCase));
@@ -172,6 +189,7 @@ internal sealed class AppController : IDisposable
                 _toolbar.PlaceTopCenter(display);
                 PersistToolbarPosition(display);
             }
+            _interactionDisplayId = display.Id;
             MarkToolbarInteraction();
             _toolbar.ShowAnimated();
         }
@@ -245,6 +263,9 @@ internal sealed class AppController : IDisposable
 
     private void MarkToolbarInteraction() => _lastToolbarInteraction = DateTime.UtcNow;
 
+    private OverlayWindow? DrawingOverlay() => _interactionDisplayId is { } id && _overlays.TryGetValue(id, out var overlay)
+        ? overlay : ActiveOverlay();
+
     private OverlayWindow? ActiveOverlay()
     {
         if (_toolbar?.DisplayId is { } id && _overlays.TryGetValue(id, out var target)) return target;
@@ -265,6 +286,17 @@ internal sealed class AppController : IDisposable
         {
             _state.SetDrawing(!_state.IsDrawing);
             ShowToolbarFromCommand();
+        });
+        menu.Items.Add("Copy display diagnostics", null, (_, _) =>
+        {
+            var lines = _overlays.Values.Select(overlay =>
+            {
+                var hwnd = new WindowInteropHelper(overlay).Handle;
+                NativeMethods.GetWindowRect(hwnd, out var rect);
+                return $"{overlay.Display}; HWND=({rect.Left},{rect.Top}) {rect.Right - rect.Left}x{rect.Bottom - rect.Top}; " +
+                    $"visible={overlay.IsVisible}; drawing={_state.IsDrawing}; style=0x{NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle).ToInt64():X}";
+            });
+            System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, lines));
         });
         menu.Items.Add("Quit ScreenInk", null, (_, _) => System.Windows.Application.Current.Shutdown());
         var executableIcon = Environment.ProcessPath is { } path
