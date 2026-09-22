@@ -14,6 +14,8 @@ internal static partial class NativeMethods
     internal const uint ModControl = 0x0002;
     internal const uint ModShift = 0x0004;
     internal const uint MonitorDefaultToNearest = 0x00000002;
+    internal const uint SwpNoZOrder = 0x0004;
+    internal const uint SwpFrameChanged = 0x0020;
     internal const uint SwpNoSize = 0x0001;
     internal const uint SwpNoMove = 0x0002;
     internal const uint SwpNoActivate = 0x0010;
@@ -33,6 +35,9 @@ internal static partial class NativeMethods
         internal int Right;
         internal int Bottom;
     }
+
+    [LibraryImport("user32.dll")]
+    internal static partial short GetAsyncKeyState(int key);
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     internal static partial nint GetWindowLongPtr(nint window, int index);

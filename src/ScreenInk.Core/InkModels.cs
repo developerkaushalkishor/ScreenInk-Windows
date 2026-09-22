@@ -29,7 +29,7 @@ public enum DrawingTool
 
 public enum StrokeKind
 {
-    Freehand, Line, Arrow, Rectangle, Ellipse, Diamond, Text
+    Freehand, Line, Arrow, Rectangle, Ellipse, Diamond, Text, Board
 }
 
 public enum InkTextAlignment
@@ -39,6 +39,9 @@ public enum InkTextAlignment
 
 public sealed record InkStroke
 {
+    public Guid Id { get; init; } = Guid.NewGuid();
+    public Guid? ParentBoardId { get; init; }
+    public BoardStyle BoardStyle { get; init; }
     public required IReadOnlyList<InkPoint> Points { get; init; }
     public uint Color { get; init; } = 0xFFBF5AF2;
     public double Width { get; init; } = 4;
@@ -49,6 +52,7 @@ public sealed record InkStroke
     public StrokeKind Kind { get; init; } = StrokeKind.Freehand;
     public string? Text { get; init; }
     public double FontSize { get; init; } = 28;
+    public double TextWidth { get; init; } = 320;
     public string FontFamily { get; init; } = "Segoe Print";
     public InkTextAlignment TextAlignment { get; init; }
 

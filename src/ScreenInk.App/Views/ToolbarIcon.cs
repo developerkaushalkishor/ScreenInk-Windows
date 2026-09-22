@@ -42,7 +42,7 @@ internal static class ToolbarIcons
             [ToolbarIcon.Screenshot] = "M4,7 L8,7 L10,4 L15,4 L17,7 L21,7 L21,19 L4,19 Z M12,10 A3,3 0 1 0 12,16 A3,3 0 1 0 12,10",
             [ToolbarIcon.AutoHide] = "M3,12 Q7,6 12,6 Q17,6 21,12 Q17,18 12,18 Q7,18 3,12 Z M12,9 A3,3 0 1 0 12,15 A3,3 0 1 0 12,9 M17,4 L21,4 L21,8",
             [ToolbarIcon.Power] = "M12,3 L12,12 M7,5 Q3,8 3,13 A9,9 0 1 0 17,5",
-            [ToolbarIcon.Hide] = "M5,9 L12,16 L19,9",
+            [ToolbarIcon.Hide] = "M5,15 L12,8 L19,15",
             [ToolbarIcon.More] = "M5,12 A1,1 0 1 0 7,12 A1,1 0 1 0 5,12 M11,12 A1,1 0 1 0 13,12 A1,1 0 1 0 11,12 M17,12 A1,1 0 1 0 19,12 A1,1 0 1 0 17,12"
         };
 
@@ -57,10 +57,10 @@ internal static class ToolbarIcons
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round,
             Fill = Brushes.Transparent,
-            Stretch = Stretch.Uniform,
-            Width = 20,
-            Height = 20
+            Stretch = Stretch.None
         };
-        return new Viewbox { Width = 20, Height = 20, Child = path };
+        var canvas = new Canvas { Width = 24, Height = 24 };
+        canvas.Children.Add(path);
+        return new Viewbox { Width = 20, Height = 20, Child = canvas };
     }
 }

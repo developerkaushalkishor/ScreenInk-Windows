@@ -15,6 +15,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ScreenInk.Core\ScreenInk.Core.csproj" />
+    <InternalsVisibleTo Include="ScreenInk.WindowsTests" />
     <Resource Include="Assets\ScreenInk.ico" Condition="Exists('Assets\ScreenInk.ico')" />
   </ItemGroup>
 </Project>

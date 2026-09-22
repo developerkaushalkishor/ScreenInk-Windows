@@ -20,6 +20,8 @@ internal sealed class AppController : IDisposable
     private GlobalHotKey? _hotKey;
     private DateTime _lastToolbarInteraction = DateTime.UtcNow;
     private bool _toolbarPlacementInitialized;
+    private bool _wasEnabled;
+    private IReadOnlyList<DisplayInfo> _displays = [];
 
     internal AppController()
     {
@@ -33,6 +35,11 @@ internal sealed class AppController : IDisposable
     {
         ReconcileDisplays();
         _toolbar = new ToolbarWindow(_state);
+        _toolbar.BoardRequested += (style, all, region) =>
+        {
+            if (all) foreach (var overlay in _overlays.Values) overlay.Surface.SetBoard(style, false);
+            else ActiveOverlay()?.Surface.SetBoard(style, region);
+        };
         _toolbar.UndoRequested += () => ActiveOverlay()?.Surface.Store.Undo();
         _toolbar.RedoRequested += () => ActiveOverlay()?.Surface.Store.Redo();
         _toolbar.ClearRequested += () => ActiveOverlay()?.Surface.Store.Clear();
@@ -64,6 +71,7 @@ internal sealed class AppController : IDisposable
     private void ReconcileDisplays()
     {
         var displays = DisplayService.GetDisplays();
+        _displays = displays;
         var activeIds = displays.Select(display => display.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var orphan in _overlays.Keys.Where(id => !activeIds.Contains(id)).ToArray())
         {
@@ -72,7 +80,11 @@ internal sealed class AppController : IDisposable
         }
         foreach (var display in displays)
         {
-            if (_overlays.ContainsKey(display.Id)) continue;
+            if (_overlays.TryGetValue(display.Id, out var existing))
+            {
+                if (existing.Display != display) existing.UpdateDisplay(display);
+                continue;
+            }
             var overlay = new OverlayWindow(display, _state);
             overlay.Surface.RequestNormalMode += () => _state.SetDrawing(false);
             _overlays.Add(display.Id, overlay);
@@ -120,7 +132,7 @@ internal sealed class AppController : IDisposable
         {
             foreach (var overlay in _overlays.Values)
                 if (!overlay.IsVisible) overlay.Show();
-            if (!_toolbar.IsVisible) _toolbar.ShowImmediately();
+            if (!_wasEnabled) _toolbar.ShowImmediately();
         }
         else
         {
@@ -128,6 +140,7 @@ internal sealed class AppController : IDisposable
             _toolbar.Hide();
             foreach (var overlay in _overlays.Values) overlay.Hide();
         }
+        _wasEnabled = _state.Settings.IsEnabled;
         if (_availabilityItem is not null)
             _availabilityItem.Text = _state.Settings.IsEnabled ? "Disable ScreenInk" : "Enable ScreenInk";
     }
@@ -142,7 +155,7 @@ internal sealed class AppController : IDisposable
         {
             var toolbarWidthPixels = Math.Max(320, _toolbar.ActualWidth * display.DpiScaleX);
             var triggerWidth = Math.Min(display.Width - 24, toolbarWidthPixels);
-            atEdge = cursor.Y >= display.Top && cursor.Y <= display.Top + 4 &&
+            atEdge = cursor.Y >= display.Top && cursor.Y <= display.Top + 1 &&
                 cursor.X >= display.Left + ((display.Width - triggerWidth) / 2) &&
                 cursor.X <= display.Left + ((display.Width + triggerWidth) / 2);
         }
@@ -218,9 +231,9 @@ internal sealed class AppController : IDisposable
         x >= display.Left && x < display.Left + display.Width &&
         y >= display.Top && y < display.Top + display.Height;
 
-    private static DisplayInfo DisplayAt(double x, double y)
+    private DisplayInfo DisplayAt(double x, double y)
     {
-        var displays = DisplayService.GetDisplays();
+        var displays = _displays;
         var display = displays.FirstOrDefault(value => x >= value.Left && x < value.Left + value.Width &&
             y >= value.Top && y < value.Top + value.Height);
         return display.Width > 0 ? display : displays.FirstOrDefault(value => value.Primary);
@@ -230,6 +243,7 @@ internal sealed class AppController : IDisposable
 
     private OverlayWindow? ActiveOverlay()
     {
+        if (_toolbar?.DisplayId is { } id && _overlays.TryGetValue(id, out var target)) return target;
         var cursor = System.Windows.Forms.Cursor.Position;
         return _overlays.Values.FirstOrDefault(overlay => cursor.X >= overlay.Display.Left &&
             cursor.X <= overlay.Display.Left + overlay.Display.Width && cursor.Y >= overlay.Display.Top &&

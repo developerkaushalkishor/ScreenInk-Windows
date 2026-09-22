@@ -18,6 +18,15 @@ jobs:
       - name: Build Windows app
         shell: pwsh
         run: ./scripts/build.ps1
+      - name: Windows native input and toolbar regression tests
+        shell: pwsh
+        run: dotnet run --project tests/ScreenInk.WindowsTests/ScreenInk.WindowsTests.csproj -c Release
+      - name: Upload UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenInk-ui-evidence
+          path: artifacts/ui
       - name: Package x64 smoke artifact
         shell: pwsh
         run: ./scripts/package.ps1 -Runtime win-x64

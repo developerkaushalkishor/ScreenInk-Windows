@@ -10,7 +10,7 @@ namespace ScreenInk.App.Views;
 internal sealed class OverlayWindow : Window
 {
     private readonly AppState _state;
-    internal DisplayInfo Display { get; }
+    internal DisplayInfo Display { get; private set; }
     internal InkSurface Surface { get; }
 
     internal OverlayWindow(DisplayInfo display, AppState state)
@@ -18,10 +18,9 @@ internal sealed class OverlayWindow : Window
         Display = display;
         _state = state;
         Title = $"ScreenInk Canvas — {display.Id}";
-        Left = display.Left;
-        Top = display.Top;
-        Width = display.Width;
-        Height = display.Height;
+        Width = display.Width / display.DpiScaleX;
+        Height = display.Height / display.DpiScaleY;
+        ShowActivated = false;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -30,8 +29,20 @@ internal sealed class OverlayWindow : Window
         ResizeMode = ResizeMode.NoResize;
         Surface = new InkSurface(state);
         Content = Surface;
-        SourceInitialized += (_, _) => ApplyInteractionMode();
+        SourceInitialized += (_, _) => { UpdateDisplay(display); ApplyInteractionMode(); };
+        Loaded += (_, _) => UpdateDisplay(Display);
+        Closed += (_, _) => { _state.Changed -= ApplyState; Surface.Dispose(); };
         _state.Changed += ApplyState;
+    }
+
+    internal void UpdateDisplay(DisplayInfo display)
+    {
+        Display = display;
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == 0) return;
+        NativeMethods.SetWindowPos(handle, 0, (int)display.Left, (int)display.Top,
+            (int)display.Width, (int)display.Height,
+            NativeMethods.SwpNoActivate | NativeMethods.SwpNoZOrder);
     }
 
     private void ApplyState()
@@ -47,9 +58,12 @@ internal sealed class OverlayWindow : Window
         var handle = new WindowInteropHelper(this).Handle;
         if (handle == 0) return;
         var style = NativeMethods.GetWindowLongPtr(handle, NativeMethods.GwlExStyle).ToInt64();
-        style |= NativeMethods.WsExToolWindow | NativeMethods.WsExNoActivate;
-        if (!_state.IsDrawing) style |= NativeMethods.WsExTransparent;
-        else style &= ~NativeMethods.WsExTransparent;
+        style |= NativeMethods.WsExToolWindow;
+        if (!_state.IsDrawing) style |= NativeMethods.WsExTransparent | NativeMethods.WsExNoActivate;
+        else style &= ~(NativeMethods.WsExTransparent | NativeMethods.WsExNoActivate);
         NativeMethods.SetWindowLongPtr(handle, NativeMethods.GwlExStyle, (nint)style);
+        NativeMethods.SetWindowPos(handle, 0, 0, 0, 0, 0, NativeMethods.SwpNoMove |
+            NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate |
+            NativeMethods.SwpFrameChanged);
     }
 }

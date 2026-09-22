@@ -8,7 +8,9 @@ var tests = new (string Name, Action Run)[]
     ("shift constraints", TestConstraints),
     ("shape recognition", TestRecognition),
     ("responsive toolbar geometry", TestToolbarGeometry),
-    ("edge reveal fires once per entry", TestToolbarReveal)
+    ("edge reveal fires once per entry", TestToolbarReveal),
+    ("history commands notify renderer", TestDocumentNotifications),
+    ("selection transforms preserve board ownership", TestSelectionTransform)
 };
 
 foreach (var test in tests)
@@ -106,4 +108,33 @@ static void Equal<T>(T expected, T actual) where T : notnull
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
         throw new InvalidOperationException($"Expected {expected}, got {actual}.");
+}
+
+static void TestDocumentNotifications()
+{
+    var store = new StrokeStore();
+    var changes = 0;
+    store.Changed += () => changes++;
+    store.Append(Stroke(1));
+    store.Replace(new Dictionary<int, InkStroke> { [0] = Stroke(2) });
+    store.Remove([0]); store.Undo(); store.Redo(); store.Undo(); store.Clear();
+    Equal(7, changes);
+    store.Clear();
+    Equal(7, changes);
+}
+
+static void TestSelectionTransform()
+{
+    var board = Guid.NewGuid();
+    var stroke = Stroke(10) with { Kind = StrokeKind.Text, Text = "Test", FontSize = 20,
+        TextWidth = 100, ParentBoardId = board };
+    var transformed = SelectionTransform.Apply(stroke, new InkRect(0, 0, 100, 100), new InkRect(20, 30, 200, 200));
+    Equal(new InkPoint(40, 50), transformed.Points[0]);
+    Equal(40d, transformed.FontSize);
+    Equal(200d, transformed.TextWidth);
+    Assert(transformed.ParentBoardId == board && transformed.Id == stroke.Id, "Transforms must preserve ownership and identity.");
+    var store = new StrokeStore(); store.Append(stroke);
+    store.Replace(new Dictionary<int, InkStroke> { [0] = transformed });
+    store.Undo(); Equal(stroke, store.Strokes[0]);
+    store.Redo(); Equal(transformed, store.Strokes[0]);
 }

@@ -27,12 +27,19 @@ internal sealed class ToolbarWindow : Window
     private readonly StackPanel _panel;
     private readonly Border _root;
     private readonly TranslateTransform _revealTransform = new();
-    private readonly Dictionary<DrawingTool, Button> _toolButtons = [];
+    private readonly Dictionary<DrawingTool, List<Button>> _toolButtons = [];
+    private readonly List<UIElement> _overflowCandidates = [];
+    private readonly List<(Button Button, Func<bool> Selected)> _toggleButtons = [];
+    private Button _normalButton = null!;
+    private Button _shapeButton = null!;
+    private int _animationVersion;
+    private bool _configuring;
     private readonly Dictionary<uint, List<Border>> _colorIndicators = [];
     private readonly List<Button> _quickColors = [];
     private readonly List<Popup> _popups = [];
     private bool _hideAnimationRunning;
 
+    internal event Action<BoardStyle, bool, bool>? BoardRequested;
     internal event Action? UndoRequested;
     internal event Action? RedoRequested;
     internal event Action? ClearRequested;
@@ -55,6 +62,9 @@ internal sealed class ToolbarWindow : Window
         Topmost = true;
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
+        ShowActivated = false;
+        UseLayoutRounding = true;
+        SnapsToDevicePixels = true;
 
         _panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8) };
         _root = new Border
@@ -71,13 +81,14 @@ internal sealed class ToolbarWindow : Window
         Content = _root;
 
         AddDragHandle();
-        AddButton(_panel, ToolbarIcon.Cursor, "Normal mode — interact with apps", (_, _) => _state.SetDrawing(false));
+        _normalButton = AddButton(_panel, ToolbarIcon.Cursor, "Normal mode — interact with apps", (_, _) => _state.SetDrawing(false));
         AddTool(_panel, DrawingTool.Select, ToolbarIcon.Select, "Select and move annotations");
         AddTool(_panel, DrawingTool.Pen, ToolbarIcon.Pen, "Pen — draw permanent ink");
         AddTool(_panel, DrawingTool.Highlighter, ToolbarIcon.Highlighter, "Highlighter — translucent ink");
         AddTool(_panel, DrawingTool.Eraser, ToolbarIcon.Eraser, "Whole-stroke eraser");
 
         var shapeButton = AddButton(_panel, ToolbarIcon.Shapes, "Shapes", (_, _) => { });
+        _shapeButton = shapeButton;
         var shapePopup = CreatePopup(shapeButton, CreateShapeGrid());
         shapeButton.Click += (_, _) => TogglePopup(shapePopup);
 
@@ -95,9 +106,14 @@ internal sealed class ToolbarWindow : Window
         AddButton(_panel, ToolbarIcon.Clear, "Clear active display", (_, _) => ClearRequested?.Invoke());
 
         AddSeparator(_panel);
+        // Keep normal mode, pen and recovery visible; every collapsed action remains in More.
+        foreach (UIElement item in _panel.Children)
+            if (item != _panel.Children[0] && item != _normalButton && item != _toolButtons[DrawingTool.Pen][0])
+                _overflowCandidates.Add(item);
         var moreButton = AddButton(_panel, ToolbarIcon.More, "More tools and presentation controls", (_, _) => { });
         var morePopup = CreatePopup(moreButton, CreateMoreGrid());
         moreButton.Click += (_, _) => TogglePopup(morePopup);
+        moreButton.MouseEnter += (_, _) => { ClosePopups(); morePopup.IsOpen = true; };
         AddButton(_panel, ToolbarIcon.Hide, "Hide toolbar", (_, _) => HideRequested?.Invoke());
 
         _state.Changed += RefreshState;
@@ -111,21 +127,35 @@ internal sealed class ToolbarWindow : Window
 
     internal void ConfigureForDisplay(DisplayInfo display)
     {
-        DisplayId = display.Id;
-        var showQuickColors = ToolbarGeometry.ShowQuickColors(display.LogicalWidth);
-        foreach (var button in _quickColors)
-            button.Visibility = showQuickColors ? Visibility.Visible : Visibility.Collapsed;
-        MaxWidth = Math.Max(1, display.LogicalWidth - (ToolbarGeometry.ScreenMargin * 2));
-        InvalidateMeasure();
-        Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        UpdateLayout();
+        if (_configuring) return;
+        _configuring = true;
+        try
+        {
+            DisplayId = display.Id;
+            MaxWidth = Math.Max(1, display.LogicalWidth - (ToolbarGeometry.ScreenMargin * 2));
+            foreach (var item in _overflowCandidates) item.Visibility = Visibility.Visible;
+            if (!ToolbarGeometry.ShowQuickColors(display.LogicalWidth))
+                foreach (var button in _quickColors) button.Visibility = Visibility.Collapsed;
+            _panel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            foreach (var item in _overflowCandidates.AsEnumerable().Reverse())
+            {
+                if (_panel.DesiredSize.Width + 2 <= MaxWidth) break;
+                item.Visibility = Visibility.Collapsed;
+                _panel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            }
+            Measure(new Size(MaxWidth, double.PositiveInfinity));
+            UpdateLayout();
+        }
+        finally { _configuring = false; }
     }
 
     internal void PlaceTopCenter(DisplayInfo display)
     {
+        // Establish destination DPI before measuring a previously hidden toolbar.
+        MoveToPhysicalPixel(display.Left + 12, display.Top + 12);
         ConfigureForDisplay(display);
-        var widthPixels = Math.Max(1, ActualWidth * display.DpiScaleX);
-        var heightPixels = Math.Max(1, ActualHeight * display.DpiScaleY);
+        var widthPixels = Math.Max(1, Math.Min(MaxWidth, _panel.DesiredSize.Width + 2) * display.DpiScaleX);
+        var heightPixels = Math.Max(1, (_panel.DesiredSize.Height + 2) * display.DpiScaleY);
         var frame = ToolbarGeometry.TopCenter(
             new ToolbarFrame(display.Left, display.Top, display.Width, display.Height),
             widthPixels, heightPixels, ToolbarGeometry.ScreenMargin * display.DpiScaleY);
@@ -150,6 +180,8 @@ internal sealed class ToolbarWindow : Window
 
     internal void ShowAnimated()
     {
+        if (IsVisible && !_hideAnimationRunning) { ActivateTopmostWithoutFocus(); return; }
+        _animationVersion++;
         _hideAnimationRunning = false;
         BeginAnimation(OpacityProperty, null);
         _revealTransform.BeginAnimation(TranslateTransform.YProperty, null);
@@ -166,6 +198,7 @@ internal sealed class ToolbarWindow : Window
 
     internal void ShowImmediately()
     {
+        _animationVersion++;
         _hideAnimationRunning = false;
         BeginAnimation(OpacityProperty, null);
         _revealTransform.BeginAnimation(TranslateTransform.YProperty, null);
@@ -179,10 +212,12 @@ internal sealed class ToolbarWindow : Window
     {
         if (!IsVisible || _hideAnimationRunning) return;
         _hideAnimationRunning = true;
+        var version = ++_animationVersion;
         ClosePopups();
         var animation = new DoubleAnimation(Opacity, 0, TimeSpan.FromMilliseconds(120));
         animation.Completed += (_, _) =>
         {
+            if (version != _animationVersion) return;
             _hideAnimationRunning = false;
             BeginAnimation(OpacityProperty, null);
             Opacity = 1;
@@ -228,31 +263,63 @@ internal sealed class ToolbarWindow : Window
 
     private UIElement CreateMoreGrid()
     {
-        var grid = PopupGrid(5);
+        var grid = PopupGrid(4);
+        AddTool(grid, DrawingTool.Select, ToolbarIcon.Select, "Select / resize");
+        AddTool(grid, DrawingTool.Pen, ToolbarIcon.Pen, "Pen");
+        AddTool(grid, DrawingTool.Highlighter, ToolbarIcon.Highlighter, "Highlighter");
+        AddTool(grid, DrawingTool.Eraser, ToolbarIcon.Eraser, "Eraser");
+        AddTool(grid, DrawingTool.Line, ToolbarIcon.Line, "Line");
+        AddTool(grid, DrawingTool.Arrow, ToolbarIcon.Arrow, "Arrow");
+        AddTool(grid, DrawingTool.Rectangle, ToolbarIcon.Rectangle, "Rectangle");
+        AddTool(grid, DrawingTool.Ellipse, ToolbarIcon.Ellipse, "Ellipse");
+        AddTool(grid, DrawingTool.Diamond, ToolbarIcon.Diamond, "Diamond");
+        AddButton(grid, ToolbarIcon.Width, "Pen width", (_, _) => CycleWidth());
+        AddButton(grid, ToolbarIcon.Undo, "Undo", (_, _) => UndoRequested?.Invoke());
+        AddButton(grid, ToolbarIcon.Redo, "Redo", (_, _) => RedoRequested?.Invoke());
+        AddButton(grid, ToolbarIcon.Clear, "Clear", (_, _) => ClearRequested?.Invoke());
+        var palette = AddButton(grid, ToolbarIcon.Palette, "Colors", (_, _) => { });
+        var palettePopup = CreatePopup(palette, CreatePalette());
+        palette.Click += (_, _) => TogglePopup(palettePopup);
         AddTool(grid, DrawingTool.Laser, ToolbarIcon.Laser, "Laser pointer");
         AddTool(grid, DrawingTool.Text, ToolbarIcon.Text, "Text");
-        AddButton(grid, ToolbarIcon.Fade, "Toggle fading ink", (_, _) =>
+        AddToggle(grid, ToolbarIcon.Cursor, "Cursor halo", () => _state.Settings.CursorHalo, (_, _) =>
+        { _state.Settings.CursorHalo = !_state.Settings.CursorHalo; _state.Settings.Save(); _state.Notify(); });
+        AddToggle(grid, ToolbarIcon.AutoHide, "Click ripple", () => _state.Settings.ClickAnimations, (_, _) =>
+        { _state.Settings.ClickAnimations = !_state.Settings.ClickAnimations; _state.Settings.Save(); _state.Notify(); });
+        AddToggle(grid, ToolbarIcon.Fade, "Fading ink", () => _state.FadingInk, (_, _) =>
         {
             _state.FadingInk = !_state.FadingInk;
             _state.Notify();
         });
-        AddButton(grid, ToolbarIcon.Ink, "Show or hide ink", (_, _) =>
+        AddToggle(grid, ToolbarIcon.Ink, "Ink visible", () => _state.InkVisible, (_, _) =>
         {
             _state.InkVisible = !_state.InkVisible;
             _state.Notify();
         });
-        AddButton(grid, ToolbarIcon.Board, "Cycle screen, whiteboard and blackboard", (_, _) =>
+        var boardButton = AddButton(grid, ToolbarIcon.Board, "Boards", (_, _) => { });
+        var boards = new StackPanel { Margin = new Thickness(8) };
+        var scopes = new System.Windows.Controls.ComboBox { Width = 210, Margin = new Thickness(4),
+            ItemsSource = new[] { "This display", "All displays", "Draw a region" }, SelectedIndex = 0 };
+        boards.Children.Add(scopes);
+        foreach (var style in Enum.GetValues<BoardStyle>())
         {
-            _state.BoardStyle = _state.BoardStyle switch
+            var captured = style;
+            var button = new Button { Content = style == BoardStyle.Screen ? "Remove boards" : style.ToString(),
+                Margin = new Thickness(4), Padding = new Thickness(8) };
+            button.Click += (_, _) =>
             {
-                BoardStyle.Screen => BoardStyle.Whiteboard,
-                BoardStyle.Whiteboard => BoardStyle.Blackboard,
-                _ => BoardStyle.Screen
+                BoardRequested?.Invoke(captured, scopes.SelectedIndex == 1, scopes.SelectedIndex == 2);
+                ClosePopups();
             };
-            _state.Notify();
-        });
+            boards.Children.Add(button);
+        }
+        var boardPopup = CreatePopup(boardButton, boards);
+        boardButton.Click += (_, _) => TogglePopup(boardPopup);
+        var typographyButton = AddButton(grid, ToolbarIcon.Text, "Typography", (_, _) => { });
+        var typographyPopup = CreatePopup(typographyButton, CreateTypography());
+        typographyButton.Click += (_, _) => TogglePopup(typographyPopup);
         AddButton(grid, ToolbarIcon.Screenshot, "Capture active display", (_, _) => ScreenshotRequested?.Invoke());
-        AddButton(grid, ToolbarIcon.AutoHide, "Toggle auto-hide", (_, _) =>
+        AddToggle(grid, ToolbarIcon.AutoHide, "Auto-hide", () => _state.Settings.AutoHideToolbar, (_, _) =>
         {
             _state.Settings.AutoHideToolbar = !_state.Settings.AutoHideToolbar;
             _state.Settings.Save();
@@ -260,6 +327,47 @@ internal sealed class ToolbarWindow : Window
         });
         AddButton(grid, ToolbarIcon.Power, "Disable ScreenInk; re-enable from tray", (_, _) => DisableRequested?.Invoke());
         return grid;
+    }
+
+    private UIElement CreateTypography()
+    {
+        var panel = new StackPanel { Width = 230, Margin = new Thickness(8) };
+        panel.Children.Add(new TextBlock { Text = "Font", Foreground = Brushes.White });
+        var fonts = new System.Windows.Controls.ComboBox { ItemsSource = new[]
+            { "Segoe Print", "Segoe Script", "Comic Sans MS", "Segoe UI", "Arial", "Georgia", "Consolas" },
+            SelectedItem = _state.Settings.FontFamily, Margin = new Thickness(0, 6, 0, 10) };
+        fonts.SelectionChanged += (_, _) =>
+        {
+            if (fonts.SelectedItem is not string font) return;
+            _state.Settings.FontFamily = font;
+            _state.SelectTool(DrawingTool.Text);
+        };
+        panel.Children.Add(fonts);
+        panel.Children.Add(new TextBlock { Text = "Text size", Foreground = Brushes.White });
+        var sizes = new System.Windows.Controls.ComboBox { ItemsSource = new double[] { 16, 20, 24, 28, 36, 48, 64, 96 },
+            SelectedItem = _state.Settings.FontSize, Margin = new Thickness(0, 6, 0, 10) };
+        sizes.SelectionChanged += (_, _) =>
+        {
+            if (sizes.SelectedItem is not double size) return;
+            _state.Settings.FontSize = size; _state.Settings.Save(); _state.Notify();
+        };
+        panel.Children.Add(sizes);
+        var alignment = new System.Windows.Controls.ComboBox { ItemsSource = Enum.GetValues<InkTextAlignment>(),
+            SelectedItem = _state.Settings.TextAlignment, Margin = new Thickness(0, 6, 0, 10) };
+        alignment.SelectionChanged += (_, _) =>
+        {
+            if (alignment.SelectedItem is not InkTextAlignment value) return;
+            _state.Settings.TextAlignment = value; _state.Settings.Save(); _state.Notify();
+        };
+        panel.Children.Add(new TextBlock { Text = "Alignment", Foreground = Brushes.White });
+        panel.Children.Add(alignment);
+        return panel;
+    }
+
+    private void AddToggle(Panel panel, ToolbarIcon icon, string label, Func<bool> selected, RoutedEventHandler action)
+    {
+        var button = AddButton(panel, icon, label, action);
+        _toggleButtons.Add((button, selected));
     }
 
     private static UniformGrid PopupGrid(int columns) => new()
@@ -296,7 +404,9 @@ internal sealed class ToolbarWindow : Window
     private void TogglePopup(Popup popup)
     {
         var open = !popup.IsOpen;
-        ClosePopups();
+        foreach (var other in _popups)
+            if (other != popup && !(other.Child is FrameworkElement root && root.IsAncestorOf(popup.PlacementTarget)))
+                other.IsOpen = false;
         popup.IsOpen = open;
     }
 
@@ -307,7 +417,8 @@ internal sealed class ToolbarWindow : Window
             _state.SelectTool(tool);
             ClosePopups();
         });
-        _toolButtons[tool] = button;
+        if (!_toolButtons.TryGetValue(tool, out var buttons)) _toolButtons[tool] = buttons = [];
+        buttons.Add(button);
     }
 
     private Button AddButton(Panel target, ToolbarIcon icon, string tooltip, RoutedEventHandler handler)
@@ -321,12 +432,39 @@ internal sealed class ToolbarWindow : Window
             Margin = new Thickness(2),
             Padding = new Thickness(7),
             Foreground = Brushes.White,
-            Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             Focusable = false,
             Cursor = Cursors.Hand,
             Style = CreateButtonStyle()
+        };
+        System.Windows.Automation.AutomationProperties.SetName(button, tooltip);
+        if (target != _panel)
+        {
+            button.Width = 70;
+            button.Height = 58;
+            var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            content.Children.Add((UIElement)button.Content);
+            content.Children.Add(new TextBlock
+            {
+                Text = tooltip.Split(" — ")[0], FontSize = 10, MaxWidth = 68,
+                TextTrimming = TextTrimming.CharacterEllipsis, TextAlignment = TextAlignment.Center,
+                Foreground = Brushes.White, Margin = new Thickness(0, 5, 0, 0)
+            });
+            button.Content = content;
+        }
+        var scale = new ScaleTransform(1, 1);
+        button.RenderTransform = scale;
+        button.RenderTransformOrigin = new Point(.5, .5);
+        button.PreviewMouseLeftButtonDown += (_, _) =>
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(.88, TimeSpan.FromMilliseconds(60)));
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(.88, TimeSpan.FromMilliseconds(60)));
+        };
+        button.LostMouseCapture += (_, _) =>
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(140)));
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(140)));
         };
         button.Click += handler;
         target.Children.Add(button);
@@ -339,12 +477,14 @@ internal sealed class ToolbarWindow : Window
             (byte)(color >> 8), (byte)color);
         var circle = new Border
         {
-            Width = 18,
-            Height = 18,
-            CornerRadius = new CornerRadius(9),
-            Background = new SolidColorBrush(value),
+            Width = 26,
+            Height = 26,
+            CornerRadius = new CornerRadius(13),
+            Padding = new Thickness(3),
+            Child = new System.Windows.Shapes.Ellipse { Width = 18, Height = 18, Fill = new SolidColorBrush(value) },
+            Background = Brushes.Transparent,
             BorderBrush = Brushes.White,
-            BorderThickness = new Thickness(color == _state.Settings.Color ? 2 : 0.75)
+            BorderThickness = new Thickness(color == _state.Settings.Color ? 1.5 : 0)
         };
         var button = new Button
         {
@@ -354,7 +494,6 @@ internal sealed class ToolbarWindow : Window
             Margin = new Thickness(1),
             Padding = new Thickness(5),
             ToolTip = $"Color #{color & 0xFFFFFF:X6}",
-            Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             Focusable = false,
             Cursor = Cursors.Hand,
@@ -381,6 +520,10 @@ internal sealed class ToolbarWindow : Window
     {
         var style = new Style(typeof(Button));
         style.Setters.Add(new Setter(Button.TemplateProperty, CreateButtonTemplate()));
+        style.Setters.Add(new Setter(Button.BackgroundProperty, Brushes.Transparent));
+        var selected = new Trigger { Property = Button.TagProperty, Value = true };
+        selected.Setters.Add(new Setter(Button.BackgroundProperty, new SolidColorBrush(Color.FromArgb(110, 10, 132, 255))));
+        style.Triggers.Add(selected);
         var hover = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
         hover.Setters.Add(new Setter(Button.BackgroundProperty,
             new SolidColorBrush(Color.FromArgb(48, 255, 255, 255))));
@@ -424,12 +567,21 @@ internal sealed class ToolbarWindow : Window
     private void RefreshState()
     {
         foreach (var pair in _toolButtons)
-            pair.Value.Background = pair.Key == _state.Settings.Tool && _state.IsDrawing
-                ? new SolidColorBrush(Color.FromArgb(110, 10, 132, 255))
-                : Brushes.Transparent;
+            foreach (var button in pair.Value)
+                SetSelected(button, pair.Key == _state.Settings.Tool && _state.IsDrawing);
+        SetSelected(_normalButton, !_state.IsDrawing);
+        SetSelected(_shapeButton, _state.IsDrawing && _state.Settings.Tool is
+            DrawingTool.Line or DrawingTool.Arrow or DrawingTool.Rectangle or DrawingTool.Ellipse or DrawingTool.Diamond);
+        foreach (var toggle in _toggleButtons) SetSelected(toggle.Button, toggle.Selected());
         foreach (var pair in _colorIndicators)
             foreach (var indicator in pair.Value)
-                indicator.BorderThickness = new Thickness(pair.Key == _state.Settings.Color ? 2 : 0.75);
+                indicator.BorderThickness = new Thickness(pair.Key == _state.Settings.Color ? 1.5 : 0);
+    }
+
+    private static void SetSelected(Button button, bool selected)
+    {
+        button.Tag = selected;
+        System.Windows.Automation.AutomationProperties.SetItemStatus(button, selected ? "Selected" : "Not selected");
     }
 
     private void ActivateTopmostWithoutFocus()
