@@ -43,13 +43,14 @@ internal sealed class ToolbarWindow : Window
     internal event Action? UndoRequested;
     internal event Action? RedoRequested;
     internal event Action? ClearRequested;
-    internal event Action? ScreenshotRequested;
+    internal event Action<bool, bool>? ScreenshotRequested;
+    internal bool IsCommandActive { get; set; }
     internal event Action? DisableRequested;
     internal event Action? HideRequested;
     internal event Action? DragCompleted;
 
     internal string? DisplayId { get; private set; }
-    internal bool IsInteractionActive => IsMouseOver || _popups.Any(popup => popup.IsOpen) || Mouse.Captured is not null;
+    internal bool IsInteractionActive => IsCommandActive || IsMouseOver || _popups.Any(popup => popup.IsOpen) || Mouse.Captured is not null;
 
     internal ToolbarWindow(AppState state)
     {
@@ -318,7 +319,17 @@ internal sealed class ToolbarWindow : Window
         var typographyButton = AddButton(grid, ToolbarIcon.Text, "Typography", (_, _) => { });
         var typographyPopup = CreatePopup(typographyButton, CreateTypography());
         typographyButton.Click += (_, _) => TogglePopup(typographyPopup);
-        AddButton(grid, ToolbarIcon.Screenshot, "Capture active display", (_, _) => ScreenshotRequested?.Invoke());
+        var screenshot = AddButton(grid, ToolbarIcon.Screenshot, "Screenshot", (_, _) => { });
+        var captureOptions = new StackPanel { Width = 230, Margin = new Thickness(8) };
+        foreach (var option in new[] { ("Save display as PNG", false, false), ("Copy display", false, true),
+            ("Save region as PNG", true, false), ("Copy region", true, true) })
+        {
+            var button = new Button { Content = option.Item1, Margin = new Thickness(4), Padding = new Thickness(8) };
+            button.Click += (_, _) => ScreenshotRequested?.Invoke(option.Item2, option.Item3);
+            captureOptions.Children.Add(button);
+        }
+        var capturePopup = CreatePopup(screenshot, captureOptions);
+        screenshot.Click += (_, _) => TogglePopup(capturePopup);
         AddToggle(grid, ToolbarIcon.AutoHide, "Auto-hide", () => _state.Settings.AutoHideToolbar, (_, _) =>
         {
             _state.Settings.AutoHideToolbar = !_state.Settings.AutoHideToolbar;
@@ -444,7 +455,9 @@ internal sealed class ToolbarWindow : Window
             button.Width = 70;
             button.Height = 58;
             var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            content.Children.Add((UIElement)button.Content);
+            var artwork = (UIElement)button.Content;
+            button.Content = null;
+            content.Children.Add(artwork);
             content.Children.Add(new TextBlock
             {
                 Text = tooltip.Split(" — ")[0], FontSize = 10, MaxWidth = 68,

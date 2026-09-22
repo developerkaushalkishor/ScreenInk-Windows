@@ -43,9 +43,12 @@ internal sealed class AppController : IDisposable
         _toolbar.UndoRequested += () => ActiveOverlay()?.Surface.Store.Undo();
         _toolbar.RedoRequested += () => ActiveOverlay()?.Surface.Store.Redo();
         _toolbar.ClearRequested += () => ActiveOverlay()?.Surface.Store.Clear();
-        _toolbar.ScreenshotRequested += () =>
+        _toolbar.ScreenshotRequested += async (region, clipboard) =>
         {
-            if (ActiveOverlay() is { } overlay) ScreenshotService.Capture(overlay.Display, _toolbar);
+            if (_toolbar.IsCommandActive || ActiveOverlay() is not { } overlay) return;
+            _toolbar.IsCommandActive = true;
+            try { await ScreenshotService.CaptureAsync(overlay.Display, _toolbar, region, clipboard); }
+            finally { _toolbar.IsCommandActive = false; MarkToolbarInteraction(); }
         };
         _toolbar.DisableRequested += () => _state.SetEnabled(false);
         _toolbar.HideRequested += HideToolbarManually;
@@ -147,7 +150,7 @@ internal sealed class AppController : IDisposable
 
     private void TrackToolbar()
     {
-        if (_toolbar is null || !_state.Settings.IsEnabled) return;
+        if (_toolbar is null || !_state.Settings.IsEnabled || _toolbar.IsCommandActive) return;
         var cursor = System.Windows.Forms.Cursor.Position;
         var display = DisplayAt(cursor.X, cursor.Y);
         var atEdge = false;
