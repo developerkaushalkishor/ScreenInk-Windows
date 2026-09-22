@@ -7,12 +7,14 @@
 ScreenInk for Windows is the native Windows port of the open-source macOS screen annotation tool. It uses .NET 8, WPF and focused Win32 interop. The app is offline, has no account or analytics service, and targets Windows 10 version 2004 or newer plus Windows 11.
 
 <p align="center">
-  <a href="https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.2.0/ScreenInk-0.2.0-win-x64.zip"><strong>Download for Windows (x64)</strong></a>
+  <a href="https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.2.1/ScreenInk-0.2.1-win-x64.zip"><strong>Download for Windows (x64, small)</strong></a>
+  ·
+  <a href="https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.2.1/ScreenInk-0.2.1-win-x64-offline.zip">Download offline package</a>
   ·
   <a href="https://github.com/developerkaushalkishor/mac-tools/releases/download/v0.15.3/ScreenInk-0.15.3-macOS-arm64.zip">Download for macOS (Apple Silicon)</a>
 </p>
 
-> **Status: 0.2.0 developer preview.** The solution cross-builds successfully and core tests pass. Interaction validation must still run on a Windows machine because WPF cannot execute on macOS.
+> **Status: 0.2.1 developer preview.** The solution cross-builds successfully and core tests pass. Interaction validation must still run on a Windows machine because WPF cannot execute on macOS.
 
 ## Implemented foundation
 
@@ -45,7 +47,7 @@ Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), then
 dotnet run --project ./src/ScreenInk.App/ScreenInk.App.csproj
 ```
 
-Create a self-contained ZIP:
+Create both the small and offline ZIP packages:
 
 ```powershell
 ./scripts/package.ps1 -Runtime win-x64
@@ -55,11 +57,14 @@ The output is written under `artifacts/`. The current artifact is unsigned; publ
 
 ## Try the portable build without development tools
 
-1. [Download `ScreenInk-0.2.0-win-x64.zip`](https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.2.0/ScreenInk-0.2.0-win-x64.zip).
-2. Verify its SHA-256 value against the accompanying `.sha256` file.
-3. Extract the ZIP and launch `ScreenInk.exe`.
-4. Use the tray icon to enable/disable ScreenInk or recover the toolbar.
-5. Use `Ctrl+Alt+Shift+D` to toggle drawing mode.
+1. Download the [small Windows x64 ZIP](https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.2.1/ScreenInk-0.2.1-win-x64.zip). It requires the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
+2. If you need a package that works without installing .NET, download the larger [offline Windows x64 ZIP](https://github.com/developerkaushalkishor/ScreenInk-Windows/releases/download/v0.2.1/ScreenInk-0.2.1-win-x64-offline.zip).
+3. Verify the ZIP's SHA-256 value against its accompanying `.sha256` file.
+4. Extract the ZIP completely and launch `ScreenInk.exe`.
+5. Use the tray icon to enable/disable ScreenInk or recover the toolbar.
+6. Use `Ctrl+Alt+Shift+D` to toggle drawing mode.
+
+The small package is the recommended download on slower or unstable connections. The offline package bundles the .NET desktop runtime and is therefore much larger.
 
 The preview is unsigned, so Windows SmartScreen can show an unknown-publisher warning. A public release should be Authenticode-signed before asking non-developers to install it.
 
