@@ -91,6 +91,7 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         if (!_state.IsDrawing) return;
+        e.Handled = true;
         Focus();
         CaptureMouse();
         _start = Point(e.GetPosition(this));
@@ -267,6 +268,10 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
         if (_state.IsDrawing && _state.Settings.Tool == DrawingTool.Select) DrawSelection(dc);
     }
 
+    internal void Undo() { CancelGesture(); _selected.Clear(); Store.Undo(); }
+    internal void Redo() { CancelGesture(); _selected.Clear(); Store.Redo(); }
+    internal void Clear() { CancelGesture(); _selected.Clear(); Store.Clear(); }
+
     internal void SetBoard(BoardStyle style, bool region)
     {
         if (style == BoardStyle.Screen)
@@ -431,13 +436,19 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
     private void CollectErasures(InkPoint point)
     {
         for (var index = 0; index < Store.Strokes.Count; index++)
-            if (StrokeVisual.Hit(Store.Strokes[index], point, 8, VisualTreeHelper.GetDpi(this).PixelsPerDip, false)) _pendingErase.Add(index);
+            if (Store.Strokes[index].Kind != StrokeKind.Board && StrokeVisual.Hit(Store.Strokes[index], point, 8, VisualTreeHelper.GetDpi(this).PixelsPerDip, false)) _pendingErase.Add(index);
+    }
+
+    private bool VisibleAt(InkStroke stroke, InkPoint point)
+    {
+        var board = Store.Strokes.FirstOrDefault(s => s.Id == stroke.ParentBoardId);
+        return board is null || BoardInterior(board).Contains(point);
     }
 
     private int? HitStroke(InkPoint point)
     {
         for (var index = Store.Strokes.Count - 1; index >= 0; index--)
-            if (StrokeVisual.Hit(Store.Strokes[index], point, 7, VisualTreeHelper.GetDpi(this).PixelsPerDip, true)) return index;
+            if (VisibleAt(Store.Strokes[index], point) && StrokeVisual.Hit(Store.Strokes[index], point, 7, VisualTreeHelper.GetDpi(this).PixelsPerDip, true)) return index;
         return null;
     }
 
@@ -503,6 +514,19 @@ internal sealed class InkSurface : FrameworkElement, IDisposable
             if (target.Width < 8 || target.Height < 8) return;
         }
         else target.Offset(point.X - _start.X, point.Y - _start.Y);
+        var movingBoards = _selectionOriginals.Values.Where(s => s.Kind == StrokeKind.Board).Select(s => s.Id).ToHashSet();
+        if (movingBoards.Count > 0 && (target.Width < 80 || target.Height < 60)) return;
+        var parents = _selectionOriginals.Values.Where(s => s.ParentBoardId is not null && !movingBoards.Contains(s.ParentBoardId.Value))
+            .Select(s => s.ParentBoardId!.Value).Distinct().ToArray();
+        foreach (var parent in parents)
+        {
+            var board = Store.Strokes.FirstOrDefault(s => s.Id == parent);
+            if (board is null) continue;
+            var bounds = BoardInterior(board);
+            if (target.Width > bounds.Width || target.Height > bounds.Height) return;
+            target.X = Math.Clamp(target.X, bounds.Left, bounds.Right - target.Width);
+            target.Y = Math.Clamp(target.Y, bounds.Top, bounds.Bottom - target.Height);
+        }
         _selectionPreview = _selectionOriginals.ToDictionary(pair => pair.Key, pair => SelectionTransform.Apply(
             pair.Value, new InkRect(_selectionBounds.X, _selectionBounds.Y, _selectionBounds.Width, _selectionBounds.Height),
             new InkRect(target.X, target.Y, target.Width, target.Height)));

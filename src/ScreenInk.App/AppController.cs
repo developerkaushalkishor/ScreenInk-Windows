@@ -40,9 +40,9 @@ internal sealed class AppController : IDisposable
             if (all) foreach (var overlay in _overlays.Values) overlay.Surface.SetBoard(style, false);
             else ActiveOverlay()?.Surface.SetBoard(style, region);
         };
-        _toolbar.UndoRequested += () => ActiveOverlay()?.Surface.Store.Undo();
-        _toolbar.RedoRequested += () => ActiveOverlay()?.Surface.Store.Redo();
-        _toolbar.ClearRequested += () => ActiveOverlay()?.Surface.Store.Clear();
+        _toolbar.UndoRequested += () => ActiveOverlay()?.Surface.Undo();
+        _toolbar.RedoRequested += () => ActiveOverlay()?.Surface.Redo();
+        _toolbar.ClearRequested += () => ActiveOverlay()?.Surface.Clear();
         _toolbar.ScreenshotRequested += async (region, clipboard) =>
         {
             if (_toolbar.IsCommandActive || ActiveOverlay() is not { } overlay) return;

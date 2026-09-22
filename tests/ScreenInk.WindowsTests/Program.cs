@@ -25,6 +25,7 @@ internal static class Program
         {
             TestGeometry();
             TestNativeInput();
+            TestTextEditor();
             TestToolbar();
             Console.WriteLine("All Windows UI regression checks passed.");
             return 0;
@@ -89,6 +90,40 @@ internal static class Program
             Assert(overlay.Surface.Store.Strokes.Count == 2, "Undo must restore the erased shape.");
             overlay.Surface.Store.Clear(); Pump();
             Assert(overlay.Surface.Store.Strokes.Count == 0, "Clear must remove all ink.");
+            foreach (var tool in new[] { DrawingTool.Line, DrawingTool.Arrow, DrawingTool.Ellipse, DrawingTool.Diamond, DrawingTool.Highlighter })
+            {
+                state.SelectTool(tool); Pump();
+                Drag(overlay.Surface, new Point(120, 120), new Point(300, 220));
+                Assert(overlay.Surface.Store.Strokes.Count == 1, $"{tool} must create a stroke.");
+                Save(Render(overlay.Surface), $"tool-{tool}.png");
+                overlay.Surface.Store.Clear();
+            }
+            state.SelectTool(DrawingTool.Laser); Pump();
+            Drag(overlay.Surface, new Point(120, 120), new Point(300, 220));
+            Pump(1600);
+            Assert(overlay.Surface.Store.Strokes.Count == 0, "Laser must leave no permanent stroke.");
+            var laserImage = Render(overlay.Surface);
+            var tail = new byte[4]; laserImage.CopyPixels(new Int32Rect(300, 220, 1, 1), tail, 4, 0);
+            Assert(tail[3] <= 1, "Laser must redraw after its final sample disappears.");
+            overlay.Surface.SetBoard(BoardStyle.Whiteboard, true); Pump();
+            Drag(overlay.Surface, new Point(80, 80), new Point(500, 400));
+            Assert(overlay.Surface.Store.Strokes.Count == 1 && overlay.Surface.Store.Strokes[0].Kind == StrokeKind.Board,
+                "Region gesture must create a board.");
+            state.SelectTool(DrawingTool.Pen); Pump();
+            Drag(overlay.Surface, new Point(150, 150), new Point(550, 180));
+            Assert(overlay.Surface.Store.Strokes[1].ParentBoardId == overlay.Surface.Store.Strokes[0].Id,
+                "A stroke started inside a board must belong to it.");
+            Assert(overlay.Surface.Store.Strokes[1].Points.All(p => p.X <= 488), "Board stroke must stay inside its edge.");
+            state.SelectTool(DrawingTool.Select); Pump();
+            var childBefore = overlay.Surface.Store.Strokes[1].Points[0];
+            Drag(overlay.Surface, new Point(85, 260), new Point(125, 290));
+            var childAfter = overlay.Surface.Store.Strokes[1].Points[0];
+            Assert(Math.Abs(childAfter.X - childBefore.X - 40) < 3 && Math.Abs(childAfter.Y - childBefore.Y - 30) < 3,
+                "Board drag must move its content by the same amount.");
+            overlay.Surface.Store.Undo(); Pump();
+            Assert(overlay.Surface.Store.Strokes[1].Points[0] == childBefore, "Board and content must undo together.");
+            Save(Render(overlay.Surface), "board-and-ink.png");
+            overlay.Surface.Store.Clear(); Pump();
             var bitmap = Render(overlay.Surface);
             var pixel = new byte[4]; bitmap.CopyPixels(new Int32Rect(160, 180, 1, 1), pixel, 4, 0);
             Assert(pixel[3] > 0, "Blank canvas needs nonzero alpha in drawing mode.");
@@ -99,6 +134,34 @@ internal static class Program
             Console.WriteLine("PASS native pen, shapes, selection, eraser, history, clear, right-click and click-through");
         }
         finally { overlay.Close(); behind.Close(); }
+    }
+
+    private static void TestTextEditor()
+    {
+        var stroke = new InkStroke { Kind = StrokeKind.Text, Points = [new(80, 80)], Text = "Handwriting test",
+            FontFamily = "Segoe Print", FontSize = 28, TextAlignment = InkTextAlignment.Left };
+        var editor = new TextEntryWindow(stroke, new Point(120, 140), 320);
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            try
+            {
+                var box = (TextBox)((Border)editor.Content).Child;
+                Assert(box.Text == stroke.Text && box.FontSize == stroke.FontSize, "Text editor must preserve content and font.");
+                Assert(box.IsKeyboardFocused, "Text editor must receive keyboard input.");
+                Assert(NativeMethods.GetWindowRect(new WindowInteropHelper(editor).Handle, out var frame) &&
+                    Math.Abs(frame.Left - 119) <= 2 && Math.Abs(frame.Top - 139) <= 2, "Editor must open at the clicked physical position.");
+                Save(Render((Border)editor.Content), "text-editor.png");
+                box.Text = "Edited text";
+                box.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(box), 0, Key.Enter)
+                    { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+            }
+            catch { editor.Close(); throw; }
+        };
+        timer.Start();
+        Assert(editor.ShowDialog() == true && editor.Value == "Edited text", "Enter must save inline text.");
+        Console.WriteLine("PASS inline text placement, keyboard focus and commit");
     }
 
     private static void TestToolbar()
